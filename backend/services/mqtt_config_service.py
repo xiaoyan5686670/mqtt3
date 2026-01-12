@@ -56,11 +56,8 @@ def delete_mqtt_config(db: Session, config_id: int) -> bool:
 
 
 def activate_mqtt_config(db: Session, config_id: int) -> bool:
-    """激活MQTT配置（同时停用其他配置）"""
-    # 先将所有配置设为非激活
-    db.query(MQTTConfigModel).update({MQTTConfigModel.is_active: False})
-    
-    # 激活指定配置
+    """激活MQTT配置（不影响其他配置）"""
+    # 只激活指定配置，不影响其他配置
     db_config = db.query(MQTTConfigModel).filter(MQTTConfigModel.id == config_id).first()
     if not db_config:
         return False

@@ -16,6 +16,7 @@
                 <th>类型</th>
                 <th>位置</th>
                 <th>备注</th>
+                <th>首页展示</th>
                 <th>添加设备时间</th>
                 <th>操作</th>
               </tr>
@@ -27,6 +28,15 @@
                 <td>{{ device.device_type || device.type || '未知' }}</td>
                 <td>{{ device.location || '未知' }}</td>
                 <td>{{ device.remark || '无' }}</td>
+                <td>
+                  <span 
+                    class="badge" 
+                    :class="device.show_on_dashboard ? 'bg-success' : 'bg-secondary'"
+                  >
+                    <i :class="device.show_on_dashboard ? 'fas fa-check' : 'fas fa-times'" class="me-1"></i>
+                    {{ device.show_on_dashboard ? '是' : '否' }}
+                  </span>
+                </td>
                 <td>{{ formatDate(device.created_at) }}</td>
                 <td>
                   <router-link :to="`/devices/${device.id}`" class="btn btn-sm btn-outline-primary me-1">

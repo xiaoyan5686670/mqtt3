@@ -9,6 +9,7 @@ class DeviceBase(BaseModel):
     device_type: str
     location: Optional[str] = None
     remark: Optional[str] = None  # 备注字段
+    show_on_dashboard: Optional[bool] = True  # 是否在首页展示
 
 
 class DeviceCreate(DeviceBase):
@@ -22,6 +23,7 @@ class DeviceUpdate(BaseModel):
     status: Optional[str] = None
     location: Optional[str] = None
     remark: Optional[str] = None  # 备注字段
+    show_on_dashboard: Optional[bool] = None  # 是否在首页展示
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
 
@@ -30,6 +32,7 @@ class Device(DeviceBase):
     id: int
     status: str
     remark: Optional[str] = None  # 备注字段
+    show_on_dashboard: bool = True  # 是否在首页展示
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
     created_at: datetime  # 设备创建时间

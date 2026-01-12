@@ -63,6 +63,21 @@
           </div>
           
           <div class="mb-3">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="showOnDashboard"
+                v-model="deviceForm.show_on_dashboard"
+              />
+              <label class="form-check-label" for="showOnDashboard">
+                在首页展示
+              </label>
+            </div>
+            <div class="form-text">勾选后，该设备将在首页仪表板中显示</div>
+          </div>
+          
+          <div class="mb-3">
             <label for="mqttConfig" class="form-label">MQTT配置</label>
             <select
               class="form-control"
@@ -123,6 +138,7 @@ export default {
       device_type: '',  // 改为与后端API匹配的字段名
       location: '',
       remark: '',  // 备注字段
+      show_on_dashboard: true,  // 是否在首页展示，默认true
       mqtt_config_id: null,
       topic_config_id: null
     })
@@ -159,6 +175,7 @@ export default {
           device_type: device.device_type,  // 映射到正确的字段
           location: device.location,
           remark: device.remark || '',  // 备注字段
+          show_on_dashboard: device.show_on_dashboard !== undefined ? device.show_on_dashboard : true,  // 是否在首页展示
           mqtt_config_id: device.mqtt_config_id || null,
           topic_config_id: device.topic_config_id || null
         }
