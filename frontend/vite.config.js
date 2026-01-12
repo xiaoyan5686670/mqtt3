@@ -21,7 +21,14 @@ export default defineConfig({
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api/v1')
+        rewrite: (path) => {
+          // 如果路径已经是 /api/v1/...，直接返回（避免重复转换）
+          if (path.startsWith('/api/v1/')) {
+            return path;
+          }
+          // 否则将 /api/... 转换为 /api/v1/...
+          return path.replace(/^\/api/, '/api/v1');
+        }
       }
     }
   },

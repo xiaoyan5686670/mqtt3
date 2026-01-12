@@ -147,15 +147,32 @@
                       控制组
                     </h5>
                     <div class="sensor-data">
-                      <div class="d-flex justify-content-between mb-2">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
                         <span>继电器状态</span>
-                        <span class="fw-bold fs-5">
-                          <i class="fas fa-power-off me-1" 
-                             :class="sensorData.relay === 1 ? 'text-warning' : 'text-light'"></i>
-                          <span :class="sensorData.relay === 1 ? 'text-warning' : 'text-light'">
-                            {{ sensorData.relay === 1 ? '开启' : '关闭' }}
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="fw-bold fs-5">
+                            <i class="fas fa-power-off me-1" 
+                               :class="sensorData.relay === 1 ? 'text-warning' : 'text-light'"></i>
+                            <span :class="sensorData.relay === 1 ? 'text-warning' : 'text-light'">
+                              {{ sensorData.relay === 1 ? '开启' : '关闭' }}
+                            </span>
                           </span>
-                        </span>
+                          <button 
+                            class="btn btn-sm"
+                            :class="sensorData.relay === 1 ? 'btn-warning' : 'btn-success'"
+                            @click="toggleRelay"
+                            :disabled="!selectedDeviceId || sendingRelay"
+                            style="min-width: 80px;"
+                          >
+                            <span v-if="sendingRelay">
+                              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                              发送中
+                            </span>
+                            <span v-else>
+                              {{ sensorData.relay === 1 ? '关闭' : '开启' }}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                       <div class="d-flex justify-content-between">
                         <span>PB8电平</span>
@@ -276,6 +293,9 @@ export default {
     
     // 错误信息
     const error = ref('')
+    
+    // 继电器控制状态
+    const sendingRelay = ref(false)
     
     // 图表引用
     const chart1Ref = ref(null)
@@ -747,17 +767,60 @@ export default {
       if (chart3) chart3.dispose()
     })
     
+    // 切换继电器状态
+    const toggleRelay = async () => {
+      if (!selectedDeviceId.value) {
+        error.value = '请先选择一个设备'
+        return
+      }
+      
+      sendingRelay.value = true
+      error.value = ''
+      
+      try {
+        // 主题固定为 pc/1（小写）
+        const topic = 'pc/1'
+        
+        // 根据当前状态决定发送的消息内容
+        // 如果当前是关闭状态(0)，发送 relayon（开启命令）
+        // 如果当前是开启状态(1)，发送 relayoff（关闭命令）
+        const isCurrentlyOn = sensorData.value.relay === 1
+        const message = isCurrentlyOn ? 'relayoff' : 'relayon'
+        
+        const response = await axios.post('/api/mqtt/publish', {
+          topic: topic,
+          message: message,
+          qos: 0
+        })
+        
+        if (response.data.success) {
+          // 成功发送消息，更新本地状态（实际状态会通过MQTT消息更新）
+          sensorData.value.relay = sensorData.value.relay === 1 ? 0 : 1
+          console.log(`继电器控制消息已发送: ${topic}`)
+        } else {
+          error.value = '发送控制消息失败'
+        }
+      } catch (err) {
+        console.error('发送继电器控制消息失败:', err)
+        error.value = `发送控制消息失败: ${err.response?.data?.detail || err.message || '未知错误'}`
+      } finally {
+        sendingRelay.value = false
+      }
+    }
+    
     return {
       sensorData,
       devices,
       selectedDeviceId,
       loadingData,
       error,
+      sendingRelay,
       onDeviceChange,
       chart1Ref,
       chart2Ref,
       chart3Ref,
-      refreshData
+      refreshData,
+      toggleRelay
     }
   }
 }

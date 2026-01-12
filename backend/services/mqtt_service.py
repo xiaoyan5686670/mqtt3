@@ -191,6 +191,19 @@ class MQTTService:
 
     def parse_and_save_sensor_data(self, device_id: int, payload: str):
         """解析并保存传感器数据"""
+        # 首先检查是否是继电器控制消息（relayon/relayoff）
+        payload_lower = payload.strip().lower()
+        if payload_lower == 'relayon':
+            # 收到开启命令，设置继电器状态为1
+            self.save_sensor_data(device_id, 'Relay Status', 1, '')
+            logger.info(f"收到继电器开启命令，设备ID: {device_id}")
+            return
+        elif payload_lower == 'relayoff':
+            # 收到关闭命令，设置继电器状态为0
+            self.save_sensor_data(device_id, 'Relay Status', 0, '')
+            logger.info(f"收到继电器关闭命令，设备ID: {device_id}")
+            return
+        
         # 匹配常见的传感器数据格式
         patterns = [
             (r'Temperature1:\s*([\d.]+)\s*C', 'Temperature1', '°C'),
@@ -264,6 +277,35 @@ class MQTTService:
         logger.info("启动MQTT服务...")
         self.client.loop_start()
         return True
+
+    def publish_message(self, topic: str, message: str = "", qos: int = 0) -> bool:
+        """发布消息到指定主题"""
+        if not self.client:
+            logger.warning("MQTT客户端未初始化，尝试初始化...")
+            if not self.init_mqtt_client():
+                logger.error("无法初始化MQTT客户端")
+                return False
+            if not self.start():
+                logger.error("无法启动MQTT服务")
+                return False
+        
+        if not self.is_connected:
+            logger.warning("MQTT未连接，尝试重新连接...")
+            if not self.start():
+                logger.error("无法连接到MQTT服务器")
+                return False
+        
+        try:
+            result = self.client.publish(topic, message, qos)
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                logger.info(f"成功发布消息到主题 {topic}: {message}")
+                return True
+            else:
+                logger.error(f"发布消息失败，返回码: {result.rc}")
+                return False
+        except Exception as e:
+            logger.error(f"发布消息时出错: {e}", exc_info=True)
+            return False
 
     def stop(self):
         """停止MQTT服务"""
