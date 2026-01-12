@@ -15,8 +15,8 @@
                 <th>名称</th>
                 <th>类型</th>
                 <th>位置</th>
-                <th>状态</th>
-                <th>最后更新</th>
+                <th>备注</th>
+                <th>添加设备时间</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -24,14 +24,10 @@
               <tr v-for="device in devices" :key="device.id">
                 <td>{{ device.id }}</td>
                 <td>{{ device.name }}</td>
-                <td>{{ device.type }}</td>
+                <td>{{ device.device_type || device.type || '未知' }}</td>
                 <td>{{ device.location || '未知' }}</td>
-                <td>
-                  <span :class="device.is_online ? 'text-success' : 'text-danger'">
-                    {{ device.is_online ? '在线' : '离线' }}
-                  </span>
-                </td>
-                <td>{{ formatDate(device.last_seen) }}</td>
+                <td>{{ device.remark || '无' }}</td>
+                <td>{{ formatDate(device.created_at) }}</td>
                 <td>
                   <router-link :to="`/devices/${device.id}`" class="btn btn-sm btn-outline-primary me-1">
                     查看

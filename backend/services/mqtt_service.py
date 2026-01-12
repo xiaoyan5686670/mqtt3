@@ -174,7 +174,9 @@ class MQTTService:
                     name=device_name,
                     device_type="自动创建设备",
                     status="在线",
-                    location="未知位置"
+                    location="未知位置",
+                    remark=None,  # 备注字段，可在编辑时填写
+                    created_at=datetime.utcnow()  # 设置设备创建时间
                 )
                 self.db.add(device)
                 self.db.commit()

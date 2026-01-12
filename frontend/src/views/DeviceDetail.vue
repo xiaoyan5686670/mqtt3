@@ -37,23 +37,19 @@
                 </tr>
                 <tr>
                   <th>类型</th>
-                  <td>{{ device.type }}</td>
+                  <td>{{ device.device_type || device.type || '未知' }}</td>
                 </tr>
                 <tr>
                   <th>位置</th>
                   <td>{{ device.location || '未设置' }}</td>
                 </tr>
                 <tr>
-                  <th>状态</th>
-                  <td>
-                    <span :class="device.is_online ? 'text-success' : 'text-danger'">
-                      {{ device.is_online ? '在线' : '离线' }}
-                    </span>
-                  </td>
+                  <th>备注</th>
+                  <td>{{ device.remark || '无' }}</td>
                 </tr>
                 <tr>
-                  <th>最后更新</th>
-                  <td>{{ formatDate(device.last_seen) }}</td>
+                  <th>添加设备时间</th>
+                  <td>{{ formatDate(device.created_at) }}</td>
                 </tr>
               </tbody>
             </table>

@@ -51,6 +51,18 @@
           </div>
           
           <div class="mb-3">
+            <label for="deviceRemark" class="form-label">备注</label>
+            <textarea
+              class="form-control"
+              id="deviceRemark"
+              v-model="deviceForm.remark"
+              rows="3"
+              placeholder="可在此填写设备相关备注信息"
+            ></textarea>
+            <div class="form-text">用于记录设备的相关信息，如设备位置、用途等</div>
+          </div>
+          
+          <div class="mb-3">
             <label for="mqttConfig" class="form-label">MQTT配置</label>
             <select
               class="form-control"
@@ -110,6 +122,7 @@ export default {
       name: '',
       device_type: '',  // 改为与后端API匹配的字段名
       location: '',
+      remark: '',  // 备注字段
       mqtt_config_id: null,
       topic_config_id: null
     })
@@ -145,6 +158,7 @@ export default {
           name: device.name,
           device_type: device.device_type,  // 映射到正确的字段
           location: device.location,
+          remark: device.remark || '',  // 备注字段
           mqtt_config_id: device.mqtt_config_id || null,
           topic_config_id: device.topic_config_id || null
         }

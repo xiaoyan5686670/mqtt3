@@ -65,7 +65,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import axios from 'axios'
 
@@ -74,6 +74,7 @@ export default {
   setup() {
     const devices = ref([])
     const sensorChartRef = ref(null)
+    const isLoading = ref(false)
     let chartInstance = null
     let refreshInterval = null
     
@@ -113,22 +114,25 @@ export default {
     // 初始化图表数据
     const chartData = loadChartData()
 
-    // 计算属性
-    const onlineDevices = () => devices.value.filter(d => d.is_online).length
-    const offlineDevices = () => devices.value.filter(d => !d.is_online).length
-    const sensorCount = () => {
+    // 计算属性 - 使用 computed 提高性能
+    const onlineDevices = computed(() => devices.value.filter(d => d.is_online).length)
+    const offlineDevices = computed(() => devices.value.filter(d => !d.is_online).length)
+    const sensorCount = computed(() => {
       return devices.value.reduce((count, device) => {
         return count + (device.sensors ? device.sensors.length : 0)
       }, 0)
-    }
+    })
 
     // 获取设备数据
     const fetchDevices = async () => {
       try {
+        isLoading.value = true
         const response = await axios.get('/api/devices')
         devices.value = response.data
       } catch (error) {
         console.error('获取设备数据失败:', error)
+      } finally {
+        isLoading.value = false
       }
     }
 
@@ -144,17 +148,18 @@ export default {
           if (!deviceMap.has(sensor.device_id)) {
             deviceMap.set(sensor.device_id, {
               device_id: sensor.device_id,
-              device_name: null, // 将从设备列表中获取
+              device_location: null, // 将从设备列表中获取位置
               sensors: []
             })
           }
           deviceMap.get(sensor.device_id).sensors.push(sensor)
         })
         
-        // 从设备列表获取设备名称
+        // 从设备列表获取设备位置（优先使用位置，如果位置为空则使用设备名称作为回退）
         devices.value.forEach(device => {
           if (deviceMap.has(device.id)) {
-            deviceMap.get(device.id).device_name = device.name || device.device_type || `设备${device.id}`
+            // 优先使用位置，如果位置为空则使用设备名称，最后使用设备类型或ID
+            deviceMap.get(device.id).device_location = device.location || device.name || device.device_type || `设备${device.id}`
           }
         })
         
@@ -190,14 +195,14 @@ export default {
 
     // 更新图表
     const updateChart = (sensorGroups) => {
-      if (!chartInstance) return
+      if (!chartInstance || !sensorGroups || sensorGroups.length === 0) return
 
       // 当前时间戳
       const now = new Date().toLocaleTimeString()
       
       // 更新时间轴数据 - 保留最近20个数据点
       chartData.timeStamps.push(now)
-      if(chartData.timeStamps.length > 20) {
+      if (chartData.timeStamps.length > 20) {
         chartData.timeStamps.shift()
       }
 
@@ -207,10 +212,12 @@ export default {
       
       // 遍历所有设备的传感器数据
       sensorGroups.forEach(deviceData => {
-        const deviceName = deviceData.device_name || `设备${deviceData.device_id}`
+        // 使用位置作为标识（如果位置为空，则使用设备名称作为回退）
+        const deviceLocation = deviceData.device_location || `设备${deviceData.device_id}`
         
         deviceData.sensors.forEach(sensor => {
-          const sensorKey = `${deviceName}-${sensor.type}`
+          // 使用位置-传感器类型作为键
+          const sensorKey = `${deviceLocation}-${sensor.type}`
           
           // 初始化传感器数据数组
           if (!chartData.sensorData[sensorKey]) {
@@ -221,7 +228,7 @@ export default {
           chartData.sensorData[sensorKey].push(sensor.value)
           
           // 限制数据长度为20个点
-          if(chartData.sensorData[sensorKey].length > 20) {
+          if (chartData.sensorData[sensorKey].length > 20) {
             chartData.sensorData[sensorKey].shift()
           }
           
@@ -323,9 +330,10 @@ export default {
     return {
       devices,
       sensorChartRef,
-      onlineDevices: onlineDevices(),
-      offlineDevices: offlineDevices(),
-      sensorCount: sensorCount()
+      isLoading,
+      onlineDevices,
+      offlineDevices,
+      sensorCount
     }
   }
 }
