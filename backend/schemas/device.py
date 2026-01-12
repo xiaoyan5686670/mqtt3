@@ -1,0 +1,33 @@
+"""设备相关的Pydantic schemas"""
+from pydantic import BaseModel
+from typing import Optional
+
+
+class DeviceBase(BaseModel):
+    name: str
+    device_type: str
+    location: Optional[str] = None
+
+
+class DeviceCreate(DeviceBase):
+    mqtt_config_id: Optional[int] = None
+    topic_config_id: Optional[int] = None
+
+
+class DeviceUpdate(BaseModel):
+    name: Optional[str] = None
+    device_type: Optional[str] = None
+    status: Optional[str] = None
+    location: Optional[str] = None
+    mqtt_config_id: Optional[int] = None
+    topic_config_id: Optional[int] = None
+
+
+class Device(DeviceBase):
+    id: int
+    status: str
+    mqtt_config_id: Optional[int] = None
+    topic_config_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True

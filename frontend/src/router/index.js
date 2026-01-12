@@ -1,0 +1,76 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import Dashboard from '../views/Dashboard.vue'
+import DeviceList from '../views/DeviceList.vue'
+import DeviceDetail from '../views/DeviceDetail.vue'
+import DeviceEdit from '../views/DeviceEdit.vue'
+import MqttConfig from '../views/MqttConfig.vue'
+import TopicConfig from '../views/TopicConfig.vue'
+import RealTimeData from '../views/RealTimeData.vue'
+import Login from '../views/Login.vue'
+import SubscribeOptions from '../views/SubscribeOptions.vue'
+
+const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
+  {
+    path: '/',
+    redirect: '/dashboard'
+  },
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: Dashboard
+  },
+  {
+    path: '/devices',
+    name: 'DeviceList',
+    component: DeviceList
+  },
+  {
+    path: '/devices/:id',
+    name: 'DeviceDetail',
+    component: DeviceDetail,
+    props: true
+  },
+  {
+    path: '/devices/new',
+    name: 'DeviceNew',
+    component: DeviceEdit
+  },
+  {
+    path: '/devices/:id/edit',
+    name: 'DeviceEdit',
+    component: DeviceEdit,
+    props: true
+  },
+  {
+    path: '/realtime-data',
+    name: 'RealTimeData',
+    component: RealTimeData
+  },
+  {
+    path: '/mqtt-config',
+    name: 'MqttConfig',
+    component: MqttConfig
+  },
+  {
+    path: '/topic-config',
+    name: 'TopicConfig',
+    component: TopicConfig
+  },
+  {
+    path: '/subscribe-options',
+    name: 'SubscribeOptions',
+    component: SubscribeOptions
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+export default router
