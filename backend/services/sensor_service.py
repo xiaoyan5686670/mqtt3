@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from models.sensor import SensorDataModel
-from schemas.sensor import SensorDataCreate
+from schemas.sensor import SensorDataCreate, SensorDataUpdate
 
 
 def get_sensor_data(db: Session, sensor_id: int) -> Optional[SensorDataModel]:
@@ -43,3 +43,37 @@ def create_sensor_data(db: Session, sensor_data: SensorDataCreate) -> SensorData
     db.commit()
     db.refresh(db_sensor)
     return db_sensor
+
+
+def update_sensor_display_name(db: Session, sensor_id: int, display_name: Optional[str]) -> Optional[SensorDataModel]:
+    """更新传感器的显示名称"""
+    sensor = db.query(SensorDataModel).filter(SensorDataModel.id == sensor_id).first()
+    if not sensor:
+        return None
+    
+    # 如果 display_name 为空字符串，设置为 None
+    sensor.display_name = display_name if display_name and display_name.strip() else None
+    db.commit()
+    db.refresh(sensor)
+    return sensor
+
+
+def update_sensor_by_type_and_device(db: Session, device_id: int, sensor_type: str, display_name: Optional[str]) -> Optional[SensorDataModel]:
+    """根据设备ID和传感器类型更新显示名称（更新该类型的所有传感器）"""
+    sensors = db.query(SensorDataModel).filter(
+        SensorDataModel.device_id == device_id,
+        SensorDataModel.type == sensor_type
+    ).all()
+    
+    if not sensors:
+        return None
+    
+    # 更新所有匹配的传感器
+    for sensor in sensors:
+        sensor.display_name = display_name if display_name and display_name.strip() else None
+    
+    db.commit()
+    if sensors:
+        db.refresh(sensors[0])
+        return sensors[0]
+    return None

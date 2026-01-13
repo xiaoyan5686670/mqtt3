@@ -16,3 +16,4 @@ class SensorDataModel(Base):
     min_value = Column(Float, nullable=True)
     max_value = Column(Float, nullable=True)
     alert_status = Column(String, nullable=True)
+    display_name = Column(String, nullable=True)  # 自定义显示名称

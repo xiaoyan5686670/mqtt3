@@ -122,7 +122,44 @@
                       class="col-6"
                     >
                       <div class="metric-card">
-                        <div class="metric-label">{{ getSensorDisplayName(sensor.type) }}</div>
+                        <div class="metric-label">
+                          <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
+                            {{ getSensorDisplayName(sensor) }}
+                            <button 
+                              class="btn-edit-sensor"
+                              @click.stop="startEditSensor(deviceData.device.id, sensor)"
+                              title="编辑名称"
+                            >
+                              <i class="fas fa-edit"></i>
+                            </button>
+                          </span>
+                          <div v-else class="sensor-edit-input">
+                            <input
+                              type="text"
+                              v-model="editingSensorName"
+                              @keyup.enter="saveSensorName(deviceData.device.id, sensor)"
+                              @keyup.esc="cancelEditSensor"
+                              @focus="$event.target.select()"
+                              class="form-control form-control-sm"
+                              :maxlength="50"
+                              :data-sensor-key="`${deviceData.device.id}-${sensor.type}`"
+                            />
+                            <button 
+                              class="btn btn-sm btn-success ms-1"
+                              @click="saveSensorName(deviceData.device.id, sensor)"
+                              title="保存"
+                            >
+                              <i class="fas fa-check"></i>
+                            </button>
+                            <button 
+                              class="btn btn-sm btn-secondary ms-1"
+                              @click="cancelEditSensor"
+                              title="取消"
+                            >
+                              <i class="fas fa-times"></i>
+                            </button>
+                          </div>
+                        </div>
                         <div class="metric-value">
                           {{ formatSensorValue(sensor.value) }}
                           <span class="metric-unit">{{ sensor.unit || '' }}</span>
@@ -147,7 +184,43 @@
                     class="sensor-row mb-1"
                   >
                     <div class="d-flex justify-content-between align-items-center">
-                      <span class="sensor-label">{{ getSensorDisplayName(sensor.type) }}</span>
+                      <span class="sensor-label">
+                        <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
+                          {{ getSensorDisplayName(sensor) }}
+                          <button 
+                            class="btn-edit-sensor"
+                            @click.stop="startEditSensor(deviceData.device.id, sensor)"
+                            title="编辑名称"
+                          >
+                            <i class="fas fa-edit"></i>
+                          </button>
+                        </span>
+                        <div v-else class="sensor-edit-input">
+                          <input
+                            type="text"
+                            v-model="editingSensorName"
+                            @keyup.enter="saveSensorName(deviceData.device.id, sensor)"
+                            @keyup.esc="cancelEditSensor"
+                            class="form-control form-control-sm"
+                            :maxlength="50"
+                            ref="sensorNameInput"
+                          />
+                          <button 
+                            class="btn btn-sm btn-success ms-1"
+                            @click="saveSensorName(deviceData.device.id, sensor)"
+                            title="保存"
+                          >
+                            <i class="fas fa-check"></i>
+                          </button>
+                          <button 
+                            class="btn btn-sm btn-secondary ms-1"
+                            @click="cancelEditSensor"
+                            title="取消"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
+                      </span>
                       <div class="d-flex align-items-center">
                         <span class="sensor-value-small me-2">
                           {{ formatSensorValue(sensor.value) }}{{ sensor.unit || '' }}
@@ -213,6 +286,8 @@ export default {
     const filteredDevices = ref([])
     const isLoading = ref(false)
     const searchKeyword = ref('')
+    const editingSensorId = ref(null)  // 当前正在编辑的传感器ID（格式：deviceId-sensorType）
+    const editingSensorName = ref('')  // 正在编辑的传感器名称
     let refreshInterval = null
 
     // 计算属性
@@ -341,8 +416,14 @@ export default {
       return sensors && sensors.some(s => isPrioritySensor(s.type))
     }
 
-    // 获取传感器显示名称
-    const getSensorDisplayName = (type) => {
+    // 获取传感器显示名称（优先使用自定义名称）
+    const getSensorDisplayName = (sensor) => {
+      // 如果传感器对象有 display_name 且不为空，使用自定义名称
+      if (sensor.display_name && sensor.display_name.trim()) {
+        return sensor.display_name.trim()
+      }
+      // 否则使用默认映射
+      const type = typeof sensor === 'string' ? sensor : sensor.type
       const nameMap = {
         'Temperature1': '温度1',
         'Temperature2': '温度2',
@@ -352,6 +433,70 @@ export default {
         'PB8 Level': 'PB8'
       }
       return nameMap[type] || type
+    }
+
+    // 开始编辑传感器名称
+    const startEditSensor = (deviceId, sensor) => {
+      const sensorKey = `${deviceId}-${sensor.type}`
+      editingSensorId.value = sensorKey
+      editingSensorName.value = getSensorDisplayName(sensor)
+      // 等待 DOM 更新后聚焦输入框
+      setTimeout(() => {
+        const input = document.querySelector(`input[data-sensor-key="${sensorKey}"]`)
+        if (input) {
+          input.focus()
+          input.select()
+        }
+      }, 100)
+    }
+
+    // 保存传感器名称
+    const saveSensorName = async (deviceId, sensor) => {
+      const newName = editingSensorName.value.trim()
+      
+      // 验证名称长度
+      if (newName.length > 50) {
+        alert('传感器名称不能超过50个字符')
+        return
+      }
+
+      try {
+        // 调用 API 更新传感器显示名称（按设备ID和类型更新）
+        await axios.put(
+          `/api/sensors/device/${deviceId}/type/${encodeURIComponent(sensor.type)}/display-name`,
+          { display_name: newName || null }
+        )
+        
+        // 更新本地数据
+        const deviceData = devicesWithSensors.value.find(d => d.device.id === deviceId)
+        if (deviceData) {
+          const sensorToUpdate = deviceData.sensors.find(s => s.type === sensor.type)
+          if (sensorToUpdate) {
+            sensorToUpdate.display_name = newName || null
+          }
+        }
+        
+        // 更新过滤后的数据
+        const filteredDeviceData = filteredDevices.value.find(d => d.device.id === deviceId)
+        if (filteredDeviceData) {
+          const sensorToUpdate = filteredDeviceData.sensors.find(s => s.type === sensor.type)
+          if (sensorToUpdate) {
+            sensorToUpdate.display_name = newName || null
+          }
+        }
+        
+        // 取消编辑状态
+        cancelEditSensor()
+      } catch (error) {
+        console.error('保存传感器名称失败:', error)
+        alert('保存失败，请重试')
+      }
+    }
+
+    // 取消编辑传感器名称
+    const cancelEditSensor = () => {
+      editingSensorId.value = null
+      editingSensorName.value = ''
     }
 
     // 获取传感器百分比
@@ -421,6 +566,8 @@ export default {
       filteredDevices,
       isLoading,
       searchKeyword,
+      editingSensorId,
+      editingSensorName,
       onlineDevices,
       offlineDevices,
       sensorCount,
@@ -434,7 +581,10 @@ export default {
       getOtherSensors,
       hasPrioritySensors,
       handleSearch,
-      clearSearch
+      clearSearch,
+      startEditSensor,
+      saveSensorName,
+      cancelEditSensor
     }
   }
 }
@@ -492,6 +642,10 @@ export default {
   color: #6c757d;
   margin-bottom: 4px;
   font-weight: 500;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .metric-value {
@@ -538,6 +692,82 @@ export default {
 .sensor-label {
   font-size: 0.8rem;
   color: #6c757d;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 传感器名称包装器 */
+.sensor-name-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  cursor: default;
+}
+
+/* 传感器名称编辑按钮 */
+.btn-edit-sensor {
+  background: transparent;
+  border: none;
+  color: #6c757d;
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  line-height: 1;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* 悬停时显示编辑按钮 - 多种选择器确保触发 */
+.sensor-name-wrapper:hover .btn-edit-sensor,
+.metric-label:hover .sensor-name-wrapper .btn-edit-sensor,
+.sensor-label:hover .sensor-name-wrapper .btn-edit-sensor,
+.metric-label:hover .btn-edit-sensor,
+.sensor-label:hover .btn-edit-sensor,
+.metric-card:hover .btn-edit-sensor,
+.sensor-row:hover .btn-edit-sensor,
+.priority-metrics:hover .btn-edit-sensor,
+.other-sensors:hover .btn-edit-sensor {
+  opacity: 1;
+}
+
+.btn-edit-sensor:hover {
+  color: #007bff;
+  background: rgba(0, 123, 255, 0.15);
+  opacity: 1 !important;
+}
+
+.btn-edit-sensor:active {
+  background: rgba(0, 123, 255, 0.25);
+}
+
+/* 传感器名称编辑输入框 */
+.sensor-edit-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.sensor-edit-input input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sensor-edit-input .btn {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  line-height: 1.2;
 }
 
 .sensor-value-small {
