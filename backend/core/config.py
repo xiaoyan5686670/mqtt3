@@ -5,6 +5,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
 import os
+from pathlib import Path
 from typing import List
 
 
@@ -28,8 +29,42 @@ class Settings(BaseSettings):
     # 数据库配置
     database_url: str = Field(
         default="sqlite:///./mqtt_iot.db",
-        description="数据库连接URL"
+        description="数据库连接URL（将在初始化时解析为项目根目录的绝对路径）"
     )
+    
+    @field_validator('database_url', mode='after')
+    @classmethod
+    def resolve_database_path(cls, v: str) -> str:
+        """解析数据库路径，确保指向项目根目录"""
+        if not v.startswith("sqlite:///"):
+            return v
+        
+        # 移除 sqlite:/// 前缀
+        path_part = v[10:]
+        
+        # 如果是绝对路径，直接返回
+        if path_part.startswith("/"):
+            return v
+        
+        # 获取项目根目录（backend目录的父目录）
+        # 假设config.py在backend/core/目录下
+        backend_dir = Path(__file__).parent.parent
+        project_root = backend_dir.parent
+        
+        # 处理相对路径
+        if path_part.startswith("./"):
+            # 相对于项目根目录
+            db_path = project_root / path_part[2:]
+        elif path_part.startswith("../"):
+            # 相对于backend目录的父目录（项目根目录）
+            db_path = project_root / path_part[3:]
+        else:
+            # 直接是文件名，放在项目根目录
+            db_path = project_root / path_part
+        
+        # 转换为绝对路径的SQLite URL
+        abs_path = db_path.absolute()
+        return f"sqlite:///{abs_path}"
     
     # MQTT默认配置
     mqtt_default_port: int = Field(default=1883)

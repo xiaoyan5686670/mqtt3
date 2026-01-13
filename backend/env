@@ -17,7 +17,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 # ==================== 数据库配置 ====================
 # SQLite数据库路径（相对路径或绝对路径）
-DATABASE_URL=sqlite:///./mqtt_iot.db
+# 注意：相对于backend目录，../mqtt_iot.db 指向项目根目录
+DATABASE_URL=sqlite:///../mqtt_iot.db
 
 # ==================== MQTT默认配置 ====================
 MQTT_DEFAULT_PORT=1883

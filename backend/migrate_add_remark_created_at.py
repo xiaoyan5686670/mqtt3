@@ -18,7 +18,7 @@ import re
 def get_database_path():
     """获取数据库文件路径，使用和应用相同的逻辑"""
     # 尝试从环境变量或配置文件读取
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./mqtt_iot.db")
+    database_url = os.getenv("DATABASE_URL", "sqlite:///../mqtt_iot.db")
     
     # 解析 SQLite URL: sqlite:///./mqtt_iot.db 或 sqlite:////absolute/path
     if database_url.startswith("sqlite:///"):
@@ -28,12 +28,21 @@ def get_database_path():
         # 如果是绝对路径（以 / 开头）
         if path_part.startswith("/"):
             return Path(path_part)
-        # 如果是相对路径（以 ./ 开头）
+        # 如果是相对路径（以 ./ 或 ../ 开头）
         elif path_part.startswith("./"):
             # 相对于当前工作目录
             return Path.cwd() / path_part[2:]
+        elif path_part.startswith("../"):
+            # 相对于当前工作目录的父目录（项目根目录）
+            return Path.cwd().parent / path_part[3:]
         else:
-            # 直接是文件名，相对于当前工作目录
+            # 直接是文件名，先尝试项目根目录
+            script_dir = Path(__file__).parent
+            project_root = script_dir.parent
+            root_db = project_root / path_part
+            if root_db.exists():
+                return root_db
+            # 如果项目根目录不存在，则使用当前工作目录
             return Path.cwd() / path_part
     else:
         # 如果不是 SQLite URL，直接作为路径处理

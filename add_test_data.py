@@ -7,8 +7,13 @@ import sqlite3
 from datetime import datetime
 
 def add_test_sensor_data():
-    # 连接到数据库
-    conn = sqlite3.connect('/Users/qinxiaoyan/work/mqtt3/backend/mqtt_iot.db')
+    # 连接到数据库（项目根目录）
+    import os
+    from pathlib import Path
+    # 获取项目根目录
+    project_root = Path(__file__).parent
+    db_path = project_root / 'mqtt_iot.db'
+    conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
     
     # 插入一些传感器数据
