@@ -14,36 +14,31 @@
     </div>
     
     <!-- 搜索框 -->
-    <div class="row mb-3">
-      <div class="col-md-12">
-        <div class="card">
-          <div class="card-body py-2">
-            <div class="input-group">
-              <span class="input-group-text">
-                <i class="fas fa-search"></i>
-              </span>
-              <input
-                type="text"
-                class="form-control"
-                placeholder="请输入设备名称进行搜索（支持模糊匹配）"
-                v-model="searchKeyword"
-                @input="handleSearch"
-              />
-              <button 
-                v-if="searchKeyword"
-                class="btn btn-outline-secondary" 
-                type="button"
-                @click="clearSearch"
-              >
-                <i class="fas fa-times"></i> 清除
-              </button>
-            </div>
-            <div v-if="searchKeyword" class="mt-2">
-              <small class="text-muted">
-                找到 <strong>{{ filteredDevices.length }}</strong> 个匹配的设备
-              </small>
-            </div>
-          </div>
+    <div class="search-container mb-4">
+      <div class="search-box">
+        <div class="search-input-wrapper">
+          <i class="fas fa-search search-icon"></i>
+          <input
+            type="text"
+            class="search-input"
+            placeholder="搜索设备名称、位置或类型..."
+            v-model="searchKeyword"
+            @input="handleSearch"
+          />
+          <button 
+            v-if="searchKeyword"
+            class="search-clear-btn" 
+            type="button"
+            @click="clearSearch"
+            title="清除搜索"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div v-if="searchKeyword" class="search-result-info">
+          <span class="search-count">
+            找到 <strong>{{ filteredDevices.length }}</strong> 个设备
+          </span>
         </div>
       </div>
     </div>
@@ -566,6 +561,96 @@ export default {
   font-size: 0.8rem;
 }
 
+/* 搜索框样式 */
+.search-container {
+  margin: 0 -15px 20px -15px;
+  padding: 0 15px;
+}
+
+.search-box {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  padding: 0 16px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.search-input-wrapper:focus-within {
+  border-color: #007bff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+.search-icon {
+  color: #6c757d;
+  font-size: 1rem;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.search-input-wrapper:focus-within .search-icon {
+  color: #007bff;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 12px 8px;
+  font-size: 1rem;
+  background: transparent;
+  color: #212529;
+}
+
+.search-input::placeholder {
+  color: #adb5bd;
+}
+
+.search-clear-btn {
+  background: transparent;
+  border: none;
+  color: #6c757d;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.search-clear-btn:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.search-result-info {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.search-count {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.search-count strong {
+  color: #007bff;
+  font-weight: 600;
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
   .metric-value {
@@ -574,6 +659,30 @@ export default {
   
   .device-name {
     font-size: 0.85rem;
+  }
+  
+  .search-box {
+    max-width: 100%;
+  }
+  
+  .search-input-wrapper {
+    padding: 0 12px;
+  }
+  
+  .search-input {
+    padding: 10px 6px;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .search-input {
+    font-size: 0.9rem;
+  }
+  
+  .search-icon {
+    font-size: 0.9rem;
+    margin-right: 8px;
   }
 }
 
