@@ -201,9 +201,10 @@
                             v-model="editingSensorName"
                             @keyup.enter="saveSensorName(deviceData.device.id, sensor)"
                             @keyup.esc="cancelEditSensor"
+                            @focus="$event.target.select()"
                             class="form-control form-control-sm"
                             :maxlength="50"
-                            ref="sensorNameInput"
+                            :data-sensor-key="`${deviceData.device.id}-${sensor.type}`"
                           />
                           <button 
                             class="btn btn-sm btn-success ms-1"
@@ -221,7 +222,7 @@
                           </button>
                         </div>
                       </span>
-                      <div class="d-flex align-items-center">
+                      <div class="d-flex align-items-center gap-2">
                         <span class="sensor-value-small me-2">
                           {{ formatSensorValue(sensor.value) }}{{ sensor.unit || '' }}
                         </span>
@@ -232,6 +233,23 @@
                         >
                           {{ sensor.value > 0 ? 'ON' : 'OFF' }}
                         </span>
+                        <!-- 继电器控制按钮 - 基于传感器类型判断，不是 display_name -->
+                        <button 
+                          v-if="sensor.type.includes('Relay')"
+                          class="btn btn-sm relay-toggle-btn"
+                          :class="sensor.value > 0 ? 'btn-warning' : 'btn-success'"
+                          @click.stop.prevent="toggleRelay(deviceData.device.id, sensor)"
+                          :disabled="isRelaySending(deviceData.device.id, sensor.type)"
+                          :title="sensor.value > 0 ? '关闭继电器' : '开启继电器'"
+                        >
+                          <span v-if="isRelaySending(deviceData.device.id, sensor.type)">
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                          </span>
+                          <span v-else>
+                            <i class="fas" :class="sensor.value > 0 ? 'fa-power-off' : 'fa-toggle-on'"></i>
+                            {{ sensor.value > 0 ? '关闭' : '开启' }}
+                          </span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -288,6 +306,8 @@ export default {
     const searchKeyword = ref('')
     const editingSensorId = ref(null)  // 当前正在编辑的传感器ID（格式：deviceId-sensorType）
     const editingSensorName = ref('')  // 正在编辑的传感器名称
+    const sendingRelayId = ref(null)  // 当前正在发送继电器控制命令的传感器ID
+    const relayToggleLock = ref(new Set())  // 继电器切换锁，防止重复点击
     let refreshInterval = null
 
     // 计算属性
@@ -499,6 +519,82 @@ export default {
       editingSensorName.value = ''
     }
 
+    // 检查继电器是否正在发送命令
+    const isRelaySending = (deviceId, sensorType) => {
+      const sensorKey = `${deviceId}-${sensorType}`
+      return sendingRelayId.value === sensorKey || relayToggleLock.value.has(sensorKey)
+    }
+
+    // 切换继电器状态（带防抖和锁机制）
+    const toggleRelay = async (deviceId, sensor) => {
+      const sensorKey = `${deviceId}-${sensor.type}`
+      
+      // 防止重复点击：如果已经在发送中，直接返回
+      if (isRelaySending(deviceId, sensor.type)) {
+        console.log('继电器控制命令正在发送中，忽略重复点击')
+        return
+      }
+      
+      // 设置发送状态和锁
+      sendingRelayId.value = sensorKey
+      relayToggleLock.value.add(sensorKey)
+      
+      try {
+        // 主题固定为 pc/1（小写），与实时数据页面保持一致
+        const topic = 'pc/1'
+        
+        // 根据当前状态决定发送的消息内容
+        // 如果当前是关闭状态(0)，发送 relayon（开启命令）
+        // 如果当前是开启状态(1)，发送 relayoff（关闭命令）
+        const isCurrentlyOn = sensor.value > 0
+        const message = isCurrentlyOn ? 'relayoff' : 'relayon'
+        
+        console.log(`发送继电器控制命令: ${topic} - ${message} (设备ID: ${deviceId})`)
+        
+        const response = await axios.post('/api/mqtt/publish', {
+          topic: topic,
+          message: message,
+          qos: 0
+        })
+        
+        if (response.data.success) {
+          // 成功发送消息，更新本地状态（实际状态会通过MQTT消息更新）
+          // 更新设备数据中的传感器值
+          const deviceData = devicesWithSensors.value.find(d => d.device.id === deviceId)
+          if (deviceData) {
+            const sensorToUpdate = deviceData.sensors.find(s => s.type === sensor.type)
+            if (sensorToUpdate) {
+              sensorToUpdate.value = isCurrentlyOn ? 0 : 1
+            }
+          }
+          
+          // 更新过滤后的数据
+          const filteredDeviceData = filteredDevices.value.find(d => d.device.id === deviceId)
+          if (filteredDeviceData) {
+            const sensorToUpdate = filteredDeviceData.sensors.find(s => s.type === sensor.type)
+            if (sensorToUpdate) {
+              sensorToUpdate.value = isCurrentlyOn ? 0 : 1
+            }
+          }
+          
+          console.log(`继电器控制消息已成功发送: ${topic} - ${message}`)
+          
+          // 添加短暂延迟，防止快速连续点击
+          await new Promise(resolve => setTimeout(resolve, 300))
+        } else {
+          console.error('发送控制消息失败: 响应不成功')
+          alert('发送控制消息失败')
+        }
+      } catch (error) {
+        console.error('发送继电器控制消息失败:', error)
+        alert(`发送控制消息失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
+      } finally {
+        // 清除发送状态和锁
+        sendingRelayId.value = null
+        relayToggleLock.value.delete(sensorKey)
+      }
+    }
+
     // 获取传感器百分比
     const getSensorPercentage = (sensor) => {
       if (sensor.min_value === null || sensor.max_value === null) {
@@ -568,6 +664,8 @@ export default {
       searchKeyword,
       editingSensorId,
       editingSensorName,
+      sendingRelayId,
+      isRelaySending,
       onlineDevices,
       offlineDevices,
       sensorCount,
@@ -584,7 +682,8 @@ export default {
       clearSearch,
       startEditSensor,
       saveSensorName,
-      cancelEditSensor
+      cancelEditSensor,
+      toggleRelay
     }
   }
 }
@@ -768,6 +867,19 @@ export default {
   padding: 2px 6px;
   font-size: 0.7rem;
   line-height: 1.2;
+}
+
+/* 继电器控制按钮样式 */
+.relay-toggle-btn {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  min-width: 60px;
+  white-space: nowrap;
+}
+
+.relay-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .sensor-value-small {
