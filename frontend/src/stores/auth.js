@@ -1,29 +1,66 @@
 import { defineStore } from 'pinia'
+import axios from 'axios'
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
-    user: null,
-    token: localStorage.getItem('token') || null,
-    isAuthenticated: !!localStorage.getItem('token')
-  }),
+  state: () => {
+    const token = localStorage.getItem('token')
+    const userStr = localStorage.getItem('user')
+    return {
+      user: userStr ? JSON.parse(userStr) : null,
+      token: token,
+      isAuthenticated: !!token
+    }
+  },
+
+  getters: {
+    isAdmin: (state) => {
+      return state.user?.is_admin === true
+    },
+    canEdit: (state) => {
+      return state.user?.is_admin === true
+    }
+  },
 
   actions: {
-    login(username, password) {
-      // 这里应该调用API进行登录
-      return new Promise((resolve, reject) => {
-        // 模拟API调用
-        setTimeout(() => {
-          if (username === 'admin' && password === 'admin123') {
-            this.user = { username }
-            this.token = 'fake-jwt-token'
-            this.isAuthenticated = true
-            localStorage.setItem('token', this.token)
-            resolve({ success: true })
-          } else {
-            reject(new Error('用户名或密码错误'))
+    async login(username, password) {
+      try {
+        const formData = new FormData()
+        formData.append('username', username)
+        formData.append('password', password)
+        
+        const response = await axios.post('/api/auth/login', formData, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
           }
-        }, 500)
-      })
+        })
+        
+        if (response.data.access_token) {
+          this.token = response.data.access_token
+          this.user = response.data.user
+          this.isAuthenticated = true
+          localStorage.setItem('token', this.token)
+          localStorage.setItem('user', JSON.stringify(this.user))
+          return { success: true }
+        } else {
+          throw new Error('登录失败：未收到访问令牌')
+        }
+      } catch (error) {
+        const message = error.response?.data?.detail || error.message || '登录失败'
+        throw new Error(message)
+      }
+    },
+
+    async getCurrentUser() {
+      try {
+        const response = await axios.get('/api/auth/me')
+        this.user = response.data
+        localStorage.setItem('user', JSON.stringify(this.user))
+        return this.user
+      } catch (error) {
+        // 如果获取用户信息失败，清除认证状态
+        this.logout()
+        throw error
+      }
     },
 
     logout() {
@@ -31,6 +68,7 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.isAuthenticated = false
       localStorage.removeItem('token')
+      localStorage.removeItem('user')
     }
   }
 })

@@ -5,24 +5,39 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from schemas.device import Device, DeviceCreate, DeviceUpdate
+from schemas.user import User
 from services import device_service as device_service_module
 from schemas.sensor import SensorData
 from services import sensor_service as sensor_service_module
-
+from api.auth import get_current_active_user, require_admin
 
 router = APIRouter()
 
 
+def require_admin_or_readonly(current_user: User = Depends(get_current_active_user)):
+    """要求管理员权限或只读权限"""
+    return current_user
+
+
 @router.get("", response_model=List[Device])
-def get_devices(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """获取设备列表"""
+def get_devices(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取设备列表（需要认证）"""
     devices = device_service_module.get_devices(db, skip=skip, limit=limit)
     return devices
 
 
 @router.get("/{device_id}", response_model=Device)
-def get_device(device_id: int, db: Session = Depends(get_db)):
-    """获取单个设备"""
+def get_device(
+    device_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取单个设备（需要认证）"""
     device = device_service_module.get_device(db, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -30,14 +45,23 @@ def get_device(device_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=Device, status_code=status.HTTP_201_CREATED)
-def create_device(device: DeviceCreate, db: Session = Depends(get_db)):
-    """创建设备"""
+def create_device(
+    device: DeviceCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """创建设备（仅管理员）"""
     return device_service_module.create_device(db, device)
 
 
 @router.put("/{device_id}", response_model=Device)
-def update_device(device_id: int, device_update: DeviceUpdate, db: Session = Depends(get_db)):
-    """更新设备"""
+def update_device(
+    device_id: int, 
+    device_update: DeviceUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """更新设备（仅管理员）"""
     device = device_service_module.update_device(db, device_id, device_update)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -45,8 +69,12 @@ def update_device(device_id: int, device_update: DeviceUpdate, db: Session = Dep
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_device(device_id: int, db: Session = Depends(get_db)):
-    """删除设备"""
+def delete_device(
+    device_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """删除设备（仅管理员）"""
     success = device_service_module.delete_device(db, device_id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -54,7 +82,11 @@ def delete_device(device_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{device_id}/latest-sensors", response_model=List[SensorData])
-def get_latest_device_sensors(device_id: int, db: Session = Depends(get_db)):
-    """获取设备的最新传感器数据"""
+def get_latest_device_sensors(
+    device_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取设备的最新传感器数据（需要认证）"""
     sensors = sensor_service_module.get_latest_device_sensors(db, device_id)
     return sensors

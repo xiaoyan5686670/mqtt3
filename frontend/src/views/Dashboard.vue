@@ -126,6 +126,7 @@
                           <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
                             {{ getSensorDisplayName(sensor) }}
                             <button 
+                              v-if="authStore.canEdit"
                               class="btn-edit-sensor"
                               @click.stop="startEditSensor(deviceData.device.id, sensor)"
                               title="编辑名称"
@@ -188,6 +189,7 @@
                         <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
                           {{ getSensorDisplayName(sensor) }}
                           <button 
+                            v-if="authStore.canEdit"
                             class="btn-edit-sensor"
                             @click.stop="startEditSensor(deviceData.device.id, sensor)"
                             title="编辑名称"
@@ -235,7 +237,7 @@
                         </span>
                         <!-- 继电器控制按钮 - 基于传感器类型判断，不是 display_name -->
                         <button 
-                          v-if="sensor.type.includes('Relay')"
+                          v-if="sensor.type.includes('Relay') && authStore.canEdit"
                           class="btn btn-sm relay-toggle-btn"
                           :class="sensor.value > 0 ? 'btn-warning' : 'btn-success'"
                           @click.stop.prevent="toggleRelay(deviceData.device.id, sensor)"
@@ -295,10 +297,12 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '../stores/auth'
 
 export default {
   name: 'Dashboard',
   setup() {
+    const authStore = useAuthStore()
     const devices = ref([])
     const devicesWithSensors = ref([])
     const filteredDevices = ref([])
@@ -662,6 +666,7 @@ export default {
       filteredDevices,
       isLoading,
       searchKeyword,
+      authStore,
       editingSensorId,
       editingSensorName,
       sendingRelayId,

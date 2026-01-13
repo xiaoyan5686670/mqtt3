@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.database import get_db
+from schemas.user import User
 from services.mqtt_service import get_mqtt_service
 from core.logging_config import get_logger
+from api.auth import require_admin
 
 logger = get_logger(__name__)
 
@@ -20,8 +22,12 @@ class MQTTPublishRequest(BaseModel):
 
 
 @router.post("/publish")
-async def publish_message(request: MQTTPublishRequest, db: Session = Depends(get_db)):
-    """发布消息到MQTT主题"""
+async def publish_message(
+    request: MQTTPublishRequest, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """发布消息到MQTT主题（仅管理员）"""
     try:
         mqtt_service = get_mqtt_service()
         success = mqtt_service.publish_message(request.topic, request.message, request.qos)

@@ -42,11 +42,22 @@ axios.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      // 认证失败，重定向到登录页面
-      localStorage.removeItem('token');
-      window.location.href = '/#/login';
+    const status = error.response?.status;
+    if (status === 401) {
+      // 401: 认证失败（token 无效/过期），清除 token 并跳转到登录页
+      // 但排除登录接口本身，避免登录失败时也跳转
+      const url = error.config?.url || '';
+      if (!url.includes('/auth/login')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // 使用 router 跳转而不是 window.location，避免页面刷新
+        if (window.location.hash !== '#/login') {
+          window.location.href = '/#/login';
+        }
+      }
     }
+    // 403: 权限不足，不退出登录，让具体页面处理
+    // 其他错误：正常返回，让调用方处理
     return Promise.reject(error);
   }
 );
