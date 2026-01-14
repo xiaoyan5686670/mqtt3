@@ -86,7 +86,43 @@
                     <div class="d-flex align-items-center mb-1">
                       <h6 class="mb-0 me-2 device-name">
                         <i class="fas fa-microchip me-1"></i>
-                        {{ deviceData.device.name }}
+                        <span v-if="editingDeviceId !== deviceData.device.id" class="device-name-wrapper">
+                          {{ getDeviceDisplayName(deviceData.device) }}
+                          <button 
+                            v-if="authStore.canEdit"
+                            class="btn-edit-device"
+                            @click.stop="startEditDevice(deviceData.device)"
+                            title="编辑设备名称"
+                          >
+                            <i class="fas fa-edit"></i>
+                          </button>
+                        </span>
+                        <div v-else class="device-edit-input">
+                          <input
+                            type="text"
+                            v-model="editingDeviceName"
+                            @keyup.enter="saveDeviceName(deviceData.device.id)"
+                            @keyup.esc="cancelEditDevice"
+                            @focus="$event.target.select()"
+                            class="form-control form-control-sm"
+                            :maxlength="50"
+                            :data-device-id="deviceData.device.id"
+                          />
+                          <button 
+                            class="btn btn-sm btn-success ms-1"
+                            @click="saveDeviceName(deviceData.device.id)"
+                            title="保存"
+                          >
+                            <i class="fas fa-check"></i>
+                          </button>
+                          <button 
+                            class="btn btn-sm btn-secondary ms-1"
+                            @click="cancelEditDevice"
+                            title="取消"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
                       </h6>
                     </div>
                     <div class="d-flex flex-wrap gap-1 mb-1">
@@ -310,6 +346,8 @@ export default {
     const searchKeyword = ref('')
     const editingSensorId = ref(null)  // 当前正在编辑的传感器ID（格式：deviceId-sensorType）
     const editingSensorName = ref('')  // 正在编辑的传感器名称
+    const editingDeviceId = ref(null)  // 当前正在编辑的设备ID
+    const editingDeviceName = ref('')  // 正在编辑的设备名称
     const sendingRelayId = ref(null)  // 当前正在发送继电器控制命令的传感器ID
     const relayToggleLock = ref(new Set())  // 继电器切换锁，防止重复点击
     let refreshInterval = null
@@ -392,11 +430,13 @@ export default {
       const keyword = searchKeyword.value.trim().toLowerCase()
       filteredDevices.value = devicesWithSensors.value.filter(deviceData => {
         const deviceName = (deviceData.device.name || '').toLowerCase()
+        const deviceDisplayName = (deviceData.device.display_name || '').toLowerCase()
         const deviceLocation = (deviceData.device.location || '').toLowerCase()
         const deviceType = (deviceData.device.device_type || '').toLowerCase()
         
-        // 模糊匹配：设备名称、位置、类型
+        // 模糊匹配：设备名称、展示名称、位置、类型
         return deviceName.includes(keyword) || 
+               deviceDisplayName.includes(keyword) ||
                deviceLocation.includes(keyword) || 
                deviceType.includes(keyword)
       })
@@ -440,6 +480,14 @@ export default {
       return sensors && sensors.some(s => isPrioritySensor(s.type))
     }
 
+    // 获取设备显示名称（优先使用 display_name，否则使用 name）
+    const getDeviceDisplayName = (device) => {
+      if (device.display_name && device.display_name.trim()) {
+        return device.display_name.trim()
+      }
+      return device.name
+    }
+
     // 获取传感器显示名称（优先使用自定义名称）
     const getSensorDisplayName = (sensor) => {
       // 如果传感器对象有 display_name 且不为空，使用自定义名称
@@ -457,6 +505,63 @@ export default {
         'PB8 Level': 'PB8'
       }
       return nameMap[type] || type
+    }
+
+    // 开始编辑设备名称
+    const startEditDevice = (device) => {
+      editingDeviceId.value = device.id
+      editingDeviceName.value = getDeviceDisplayName(device)
+      // 等待 DOM 更新后聚焦输入框
+      setTimeout(() => {
+        const input = document.querySelector(`input[data-device-id="${device.id}"]`)
+        if (input) {
+          input.focus()
+          input.select()
+        }
+      }, 100)
+    }
+
+    // 保存设备名称
+    const saveDeviceName = async (deviceId) => {
+      const newName = editingDeviceName.value.trim()
+      
+      // 验证名称长度
+      if (newName.length > 50) {
+        alert('设备名称不能超过50个字符')
+        return
+      }
+
+      try {
+        // 调用 API 更新设备展示名称（只更新 display_name，不修改 name）
+        await axios.put(
+          `/api/devices/${deviceId}/display-name`,
+          { display_name: newName || null }
+        )
+        
+        // 更新本地数据
+        const deviceData = devicesWithSensors.value.find(d => d.device.id === deviceId)
+        if (deviceData) {
+          deviceData.device.display_name = newName || null
+        }
+        
+        // 更新过滤后的数据
+        const filteredDeviceData = filteredDevices.value.find(d => d.device.id === deviceId)
+        if (filteredDeviceData) {
+          filteredDeviceData.device.display_name = newName || null
+        }
+        
+        // 取消编辑状态
+        cancelEditDevice()
+      } catch (error) {
+        console.error('保存设备名称失败:', error)
+        alert('保存失败，请重试')
+      }
+    }
+
+    // 取消编辑设备名称
+    const cancelEditDevice = () => {
+      editingDeviceId.value = null
+      editingDeviceName.value = ''
     }
 
     // 开始编辑传感器名称
@@ -669,12 +774,15 @@ export default {
       authStore,
       editingSensorId,
       editingSensorName,
+      editingDeviceId,
+      editingDeviceName,
       sendingRelayId,
       isRelaySending,
       onlineDevices,
       offlineDevices,
       sensorCount,
       formatSensorValue,
+      getDeviceDisplayName,
       getSensorDisplayName,
       getSensorPercentage,
       getSensorStatusClass,
@@ -685,6 +793,9 @@ export default {
       hasPrioritySensors,
       handleSearch,
       clearSearch,
+      startEditDevice,
+      saveDeviceName,
+      cancelEditDevice,
       startEditSensor,
       saveSensorName,
       cancelEditSensor,
@@ -803,7 +914,8 @@ export default {
 }
 
 /* 传感器名称包装器 */
-.sensor-name-wrapper {
+.sensor-name-wrapper,
+.device-name-wrapper {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -811,8 +923,9 @@ export default {
   cursor: default;
 }
 
-/* 传感器名称编辑按钮 */
-.btn-edit-sensor {
+/* 传感器和设备名称编辑按钮 */
+.btn-edit-sensor,
+.btn-edit-device {
   background: transparent;
   border: none;
   color: #6c757d;
@@ -834,6 +947,7 @@ export default {
 
 /* 悬停时显示编辑按钮 - 多种选择器确保触发 */
 .sensor-name-wrapper:hover .btn-edit-sensor,
+.device-name-wrapper:hover .btn-edit-device,
 .metric-label:hover .sensor-name-wrapper .btn-edit-sensor,
 .sensor-label:hover .sensor-name-wrapper .btn-edit-sensor,
 .metric-label:hover .btn-edit-sensor,
@@ -841,34 +955,41 @@ export default {
 .metric-card:hover .btn-edit-sensor,
 .sensor-row:hover .btn-edit-sensor,
 .priority-metrics:hover .btn-edit-sensor,
-.other-sensors:hover .btn-edit-sensor {
+.other-sensors:hover .btn-edit-sensor,
+.device-name:hover .btn-edit-device,
+.device-card:hover .btn-edit-device {
   opacity: 1;
 }
 
-.btn-edit-sensor:hover {
+.btn-edit-sensor:hover,
+.btn-edit-device:hover {
   color: #007bff;
   background: rgba(0, 123, 255, 0.15);
   opacity: 1 !important;
 }
 
-.btn-edit-sensor:active {
+.btn-edit-sensor:active,
+.btn-edit-device:active {
   background: rgba(0, 123, 255, 0.25);
 }
 
-/* 传感器名称编辑输入框 */
-.sensor-edit-input {
+/* 传感器和设备名称编辑输入框 */
+.sensor-edit-input,
+.device-edit-input {
   display: flex;
   align-items: center;
   gap: 4px;
   width: 100%;
 }
 
-.sensor-edit-input input {
+.sensor-edit-input input,
+.device-edit-input input {
   flex: 1;
   min-width: 0;
 }
 
-.sensor-edit-input .btn {
+.sensor-edit-input .btn,
+.device-edit-input .btn {
   padding: 2px 6px;
   font-size: 0.7rem;
   line-height: 1.2;

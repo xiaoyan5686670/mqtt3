@@ -250,20 +250,29 @@ export default {
 /* 头部区域 */
 .login-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 40px 30px;
+  padding: 50px 30px 35px;
   text-align: center;
   color: white;
 }
 
 .logo-container {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .login-logo {
-  width: 80px;
+  width: 200px;
   height: auto;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  max-width: 90%;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
   animation: logoFloat 3s ease-in-out infinite;
+  transition: transform 0.3s ease;
+}
+
+.login-logo:hover {
+  transform: scale(1.05);
 }
 
 @keyframes logoFloat {
@@ -473,7 +482,7 @@ export default {
   }
 
   .login-logo {
-    width: 60px;
+    width: 140px;
   }
 
   .shape {
@@ -483,7 +492,7 @@ export default {
 
 @media (max-width: 480px) {
   .login-header {
-    padding: 25px 15px;
+    padding: 35px 15px 25px;
   }
 
   .login-body {
@@ -496,6 +505,10 @@ export default {
 
   .login-subtitle {
     font-size: 0.85rem;
+  }
+
+  .login-logo {
+    width: 120px;
   }
 }
 </style>

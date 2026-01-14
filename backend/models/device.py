@@ -10,6 +10,7 @@ class DeviceModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
+    display_name = Column(String, nullable=True)  # 展示名称，用于首页显示，不影响设备识别
     device_type = Column(String, nullable=False)
     status = Column(String, default="offline", nullable=False)
     location = Column(String, nullable=True)

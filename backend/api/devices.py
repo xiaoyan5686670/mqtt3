@@ -1,6 +1,7 @@
 """设备相关的API路由"""
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -79,6 +80,28 @@ def delete_device(
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
     return None
+
+
+class DeviceDisplayNameUpdate(BaseModel):
+    display_name: Optional[str] = None
+
+
+@router.put("/{device_id}/display-name", response_model=Device)
+def update_device_display_name(
+    device_id: int,
+    update_data: DeviceDisplayNameUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """更新设备的展示名称（仅管理员）"""
+    device = device_service_module.get_device(db, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    # 只更新 display_name 字段，不修改 name 字段
+    device_update = DeviceUpdate(display_name=update_data.display_name)
+    updated_device = device_service_module.update_device(db, device_id, device_update)
+    return updated_device
 
 
 @router.get("/{device_id}/latest-sensors", response_model=List[SensorData])
