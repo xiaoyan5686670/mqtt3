@@ -628,6 +628,17 @@ export default {
       editingSensorName.value = ''
     }
 
+    // 判断是否为继电器/开关类型（支持多种名称：Relay、电源开关、开关等）
+    const isRelayType = (sensorType) => {
+      if (!sensorType) return false
+      const typeLower = sensorType.toLowerCase()
+      // 支持多种继电器/开关类型名称
+      return typeLower.includes('relay') || 
+             typeLower.includes('电源开关') || 
+             typeLower.includes('开关') ||
+             typeLower.includes('switch')
+    }
+
     // 检查继电器是否正在发送命令
     const isRelaySending = (deviceId, sensorType) => {
       const sensorKey = `${deviceId}-${sensorType}`

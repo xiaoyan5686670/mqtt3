@@ -45,6 +45,53 @@ def get_device(
     return device
 
 
+@router.get("/{device_id}/publish-topic")
+def get_device_publish_topic(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取设备的发布主题（用于继电器控制等）"""
+    device = device_service_module.get_device(db, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    # 如果设备有关联的主题配置，使用配置的发布主题
+    if device.topic_config_id:
+        from services import topic_config_service
+        topic_config = topic_config_service.get_topic_config(db, device.topic_config_id)
+        if topic_config and topic_config.publish_topic:
+            return {
+                "device_id": device_id,
+                "publish_topic": topic_config.publish_topic,
+                "source": "topic_config"
+            }
+    
+    # 如果没有配置，尝试从设备名称推断主题（例如：pc_1 -> pc/1）
+    # 或者使用默认主题 pc/1
+    default_topic = "pc/1"
+    
+    # 尝试从设备名称提取主题
+    if device.name:
+        # 如果设备名称包含下划线，尝试转换（如 pc_1 -> pc/1）
+        if '_' in device.name:
+            parts = device.name.split('_')
+            if len(parts) >= 2:
+                inferred_topic = f"{parts[0]}/{parts[1]}"
+                return {
+                    "device_id": device_id,
+                    "publish_topic": inferred_topic,
+                    "source": "device_name"
+                }
+    
+    # 使用默认主题
+    return {
+        "device_id": device_id,
+        "publish_topic": default_topic,
+        "source": "default"
+    }
+
+
 @router.post("", response_model=Device, status_code=status.HTTP_201_CREATED)
 def create_device(
     device: DeviceCreate, 

@@ -198,11 +198,13 @@ class MQTTService:
         payload_lower = payload.strip().lower()
         if payload_lower == 'relayon':
             # 收到开启命令，设置继电器状态为1
+            # 支持多种继电器类型名称：Relay Status、电源开关、开关等
             self.save_sensor_data(device_id, 'Relay Status', 1, '')
             logger.info(f"收到继电器开启命令，设备ID: {device_id}")
             return
         elif payload_lower == 'relayoff':
             # 收到关闭命令，设置继电器状态为0
+            # 支持多种继电器类型名称：Relay Status、电源开关、开关等
             self.save_sensor_data(device_id, 'Relay Status', 0, '')
             logger.info(f"收到继电器关闭命令，设备ID: {device_id}")
             return
