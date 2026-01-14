@@ -350,7 +350,24 @@ export default {
     const editingDeviceName = ref('')  // 正在编辑的设备名称
     const sendingRelayId = ref(null)  // 当前正在发送继电器控制命令的传感器ID
     const relayToggleLock = ref(new Set())  // 继电器切换锁，防止重复点击
+    // 继电器期望状态映射（deviceId-sensorType -> {value, timestamp, timeout}）
+    const relayExpectedStates = ref(new Map())  // 用于乐观更新，避免轮询覆盖
     let refreshInterval = null
+
+    // 获取指定设备的发布主题（用于继电器控制等）
+    const fetchPublishTopic = async (deviceId) => {
+      try {
+        const resp = await axios.get(`/api/devices/${deviceId}/publish-topic`)
+        const topic = resp?.data?.publish_topic
+        if (topic && typeof topic === 'string' && topic.trim()) {
+          return topic.trim()
+        }
+      } catch (e) {
+        console.warn('获取设备发布主题失败，使用按设备隔离的默认主题:', e)
+      }
+      // 后备：按设备隔离，避免多个设备互相影响
+      return `pc/${deviceId}`
+    }
 
     // 计算属性
     const onlineDevices = computed(() => devices.value.filter(d => d.status === '在线' || d.is_online).length)
@@ -398,7 +415,42 @@ export default {
             sensors.forEach(sensor => {
               if (!sensorTypeMap.has(sensor.type) || 
                   new Date(sensor.timestamp) > new Date(sensorTypeMap.get(sensor.type).timestamp)) {
-                sensorTypeMap.set(sensor.type, sensor)
+                // 如果是继电器状态，需要检查期望状态保护
+                if (sensor.type.includes('Relay')) {
+                  const sensorKey = `${device.id}-${sensor.type}`
+                  const expectedState = relayExpectedStates.value.get(sensorKey)
+                  
+                  if (expectedState) {
+                    const now = Date.now()
+                    const timeSinceOperation = now - expectedState.timestamp
+                    
+                    if (timeSinceOperation < expectedState.timeout) {
+                      // 在保护期内，检查新数据是否与期望状态一致
+                      if (sensor.value === expectedState.value) {
+                        // 状态已确认，清除期望状态
+                        console.log(`设备 ${device.id} 继电器状态已确认: ${sensor.value}，清除期望状态保护`)
+                        relayExpectedStates.value.delete(sensorKey)
+                        sensorTypeMap.set(sensor.type, sensor)
+                      } else {
+                        // 状态不一致，可能是旧数据，使用期望状态
+                        console.log(`设备 ${device.id} 继电器状态不一致（期望: ${expectedState.value}, 收到: ${sensor.value}），保持期望状态`)
+                        const protectedSensor = { ...sensor, value: expectedState.value }
+                        sensorTypeMap.set(sensor.type, protectedSensor)
+                      }
+                    } else {
+                      // 超过保护期，使用服务器数据
+                      console.log(`设备 ${device.id} 继电器状态保护期已过，使用服务器数据: ${sensor.value}`)
+                      relayExpectedStates.value.delete(sensorKey)
+                      sensorTypeMap.set(sensor.type, sensor)
+                    }
+                  } else {
+                    // 没有期望状态，直接使用服务器数据
+                    sensorTypeMap.set(sensor.type, sensor)
+                  }
+                } else {
+                  // 非继电器传感器，直接使用
+                  sensorTypeMap.set(sensor.type, sensor)
+                }
               }
             })
             
@@ -660,8 +712,8 @@ export default {
       relayToggleLock.value.add(sensorKey)
       
       try {
-        // 主题固定为 pc/1（小写），与实时数据页面保持一致
-        const topic = 'pc/1'
+        // 按设备获取发布主题，避免多个设备共用同一主题导致互相影响
+        const topic = await fetchPublishTopic(deviceId)
         
         // 根据当前状态决定发送的消息内容
         // 如果当前是关闭状态(0)，发送 relayon（开启命令）
@@ -678,13 +730,22 @@ export default {
         })
         
         if (response.data.success) {
-          // 成功发送消息，更新本地状态（实际状态会通过MQTT消息更新）
+          // 乐观更新：立即更新本地状态，避免等待MQTT消息
+          const newState = isCurrentlyOn ? 0 : 1
+          
+          // 记录期望状态，防止轮询时被旧数据覆盖
+          relayExpectedStates.value.set(sensorKey, {
+            value: newState,
+            timestamp: Date.now(),
+            timeout: 5000
+          })
+          
           // 更新设备数据中的传感器值
           const deviceData = devicesWithSensors.value.find(d => d.device.id === deviceId)
           if (deviceData) {
             const sensorToUpdate = deviceData.sensors.find(s => s.type === sensor.type)
             if (sensorToUpdate) {
-              sensorToUpdate.value = isCurrentlyOn ? 0 : 1
+              sensorToUpdate.value = newState
             }
           }
           
@@ -693,11 +754,11 @@ export default {
           if (filteredDeviceData) {
             const sensorToUpdate = filteredDeviceData.sensors.find(s => s.type === sensor.type)
             if (sensorToUpdate) {
-              sensorToUpdate.value = isCurrentlyOn ? 0 : 1
+              sensorToUpdate.value = newState
             }
           }
           
-          console.log(`继电器控制消息已成功发送: ${topic} - ${message}`)
+          console.log(`继电器控制消息已成功发送: ${topic} - ${message}，乐观更新状态为: ${newState}`)
           
           // 添加短暂延迟，防止快速连续点击
           await new Promise(resolve => setTimeout(resolve, 300))

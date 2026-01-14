@@ -77,9 +77,11 @@ class MQTTService:
     def on_connect(self, client, userdata, flags, rc):
         """连接成功回调"""
         if rc == 0:
-            logger.info("MQTT连接成功")
+            logger.info("MQTT连接成功，开始订阅主题...")
             self.is_connected = True
+            # 订阅主题（这是正常的，用于接收传感器数据）
             self.subscribe_to_topics()
+            logger.info("主题订阅完成")
         else:
             logger.error(f"MQTT连接失败，返回码: {rc}")
 
@@ -285,6 +287,8 @@ class MQTTService:
 
     def publish_message(self, topic: str, message: str = "", qos: int = 0) -> bool:
         """发布消息到指定主题"""
+        import time
+        
         if not self.client:
             logger.warning("MQTT客户端未初始化，尝试初始化...")
             if not self.init_mqtt_client():
@@ -294,19 +298,41 @@ class MQTTService:
                 logger.error("无法启动MQTT服务")
                 return False
         
+        # 等待连接完成（最多等待5秒）
         if not self.is_connected:
             logger.warning("MQTT未连接，尝试重新连接...")
             if not self.start():
                 logger.error("无法连接到MQTT服务器")
                 return False
+            
+            # 等待连接完成
+            max_wait = 50  # 最多等待5秒（50 * 0.1秒）
+            wait_count = 0
+            while not self.is_connected and wait_count < max_wait:
+                time.sleep(0.1)
+                wait_count += 1
+            
+            if not self.is_connected:
+                logger.error("等待MQTT连接超时")
+                return False
         
         try:
+            # 发布消息（注意：这是 PUBLISH 操作，不是 SUBSCRIBE）
+            logger.info(f"准备发布消息到主题 {topic}: {message}")
             result = self.client.publish(topic, message, qos)
+            
+            # 等待发布完成（最多等待1秒）
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                logger.info(f"成功发布消息到主题 {topic}: {message}")
+                # 等待消息发送完成
+                try:
+                    result.wait_for_publish(timeout=1.0)
+                except Exception as wait_error:
+                    logger.warning(f"等待发布完成时出错（可能已发送）: {wait_error}")
+                
+                logger.info(f"✅ 成功发布消息到主题 {topic}: {message} (消息ID: {result.mid})")
                 return True
             else:
-                logger.error(f"发布消息失败，返回码: {result.rc}")
+                logger.error(f"❌ 发布消息失败，返回码: {result.rc}")
                 return False
         except Exception as e:
             logger.error(f"发布消息时出错: {e}", exc_info=True)

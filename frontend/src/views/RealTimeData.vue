@@ -297,6 +297,28 @@ export default {
     // 继电器控制状态
     const sendingRelay = ref(false)
     
+    // 继电器期望状态和最后操作时间（用于乐观更新，避免轮询覆盖）
+    const relayExpectedState = ref({
+      value: null,  // 期望的状态值（0或1），null表示没有待确认的状态
+      timestamp: 0,  // 最后操作的时间戳
+      timeout: 5000  // 超时时间（5秒），超过这个时间后不再保护
+    })
+
+    // 获取指定设备的发布主题（用于继电器控制等）
+    const fetchPublishTopic = async (deviceId) => {
+      try {
+        const resp = await axios.get(`/api/devices/${deviceId}/publish-topic`)
+        const topic = resp?.data?.publish_topic
+        if (topic && typeof topic === 'string' && topic.trim()) {
+          return topic.trim()
+        }
+      } catch (e) {
+        console.warn('获取设备发布主题失败，使用按设备隔离的默认主题:', e)
+      }
+      // 后备：按设备隔离，避免多个设备互相影响
+      return `pc/${deviceId}`
+    }
+    
     // 图表引用
     const chart1Ref = ref(null)
     const chart2Ref = ref(null)
@@ -583,7 +605,30 @@ export default {
           } else if (sensor.type === 'Humidity2') {
             tempSensorData.hum2 = sensor.value
           } else if (sensor.type === 'Relay Status') {
-            tempSensorData.relay = sensor.value
+            // 处理继电器状态：如果有待确认的期望状态，需要特殊处理
+            const now = Date.now()
+            const timeSinceOperation = now - relayExpectedState.value.timestamp
+            
+            if (relayExpectedState.value.value !== null && timeSinceOperation < relayExpectedState.value.timeout) {
+              // 在保护期内，检查新数据是否与期望状态一致
+              if (sensor.value === relayExpectedState.value.value) {
+                // 状态已确认，清除期望状态
+                console.log(`继电器状态已确认: ${sensor.value}，清除期望状态保护`)
+                relayExpectedState.value.value = null
+                tempSensorData.relay = sensor.value
+              } else {
+                // 状态不一致，可能是旧数据，保持期望状态
+                console.log(`继电器状态不一致（期望: ${relayExpectedState.value.value}, 收到: ${sensor.value}），保持期望状态`)
+                tempSensorData.relay = relayExpectedState.value.value
+              }
+            } else {
+              // 超过保护期或没有期望状态，直接使用服务器数据
+              if (relayExpectedState.value.value !== null && timeSinceOperation >= relayExpectedState.value.timeout) {
+                console.log(`继电器状态保护期已过，使用服务器数据: ${sensor.value}`)
+                relayExpectedState.value.value = null
+              }
+              tempSensorData.relay = sensor.value
+            }
           } else if (sensor.type === 'PB8 Level') {
             tempSensorData.pb8 = sensor.value
           }
@@ -778,8 +823,8 @@ export default {
       error.value = ''
       
       try {
-        // 主题固定为 pc/1（小写）
-        const topic = 'pc/1'
+        // 按设备获取发布主题，避免多个设备共用同一主题导致互相影响
+        const topic = await fetchPublishTopic(selectedDeviceId.value)
         
         // 根据当前状态决定发送的消息内容
         // 如果当前是关闭状态(0)，发送 relayon（开启命令）
@@ -794,9 +839,18 @@ export default {
         })
         
         if (response.data.success) {
-          // 成功发送消息，更新本地状态（实际状态会通过MQTT消息更新）
-          sensorData.value.relay = sensorData.value.relay === 1 ? 0 : 1
-          console.log(`继电器控制消息已发送: ${topic}`)
+          // 乐观更新：立即更新本地状态，避免等待MQTT消息
+          const newState = isCurrentlyOn ? 0 : 1
+          sensorData.value.relay = newState
+          
+          // 记录期望状态，防止轮询时被旧数据覆盖
+          relayExpectedState.value = {
+            value: newState,
+            timestamp: Date.now(),
+            timeout: 5000
+          }
+          
+          console.log(`继电器控制消息已发送: ${topic}，乐观更新状态为: ${newState}`)
         } else {
           error.value = '发送控制消息失败'
         }

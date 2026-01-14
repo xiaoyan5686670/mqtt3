@@ -92,7 +92,7 @@
                   v-model="currentConfig.subscribe_topics"
                   required
                 />
-                <div class="form-text">请输入要消费的MQTT主题，如 pc/1</div>
+                <div class="form-text">请输入要消费的MQTT主题，如 pc/1、pc/2（建议按设备区分主题）</div>
               </div>
               
               <div class="mb-3">
