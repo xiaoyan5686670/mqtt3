@@ -38,6 +38,7 @@ class Device(DeviceBase):
     show_on_dashboard: bool = True  # 是否在首页展示
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
+    publish_topic: Optional[str] = None  # 发布主题（计算属性）
     created_at: datetime  # 设备创建时间
 
     class Config:

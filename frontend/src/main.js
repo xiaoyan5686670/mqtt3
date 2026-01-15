@@ -13,6 +13,9 @@ import axios from 'axios'
 // 使用相对路径，这样Vite代理可以正确转发请求到后端
 axios.defaults.baseURL = '/'
 
+// 配置全局路径前缀
+const API_BASE_URL = '/api/v1'
+
 // 请求拦截器：在每个请求中添加JWT令牌，并统一处理API路径
 axios.interceptors.request.use(
   (config) => {
@@ -24,9 +27,9 @@ axios.interceptors.request.use(
     
     // 统一处理API路径：将 /api/* 重写为 /api/v1/*（如果路径不是 /api/v1/*）
     // 这样可以在开发环境（Vite代理）和生产环境（直接访问）中都正常工作
-    if (config.url && config.url.startsWith('/api/') && !config.url.startsWith('/api/v1/')) {
+    if (config.url && config.url.startsWith('/api/') && !config.url.startsWith(API_BASE_URL)) {
       // 重写路径：/api/* -> /api/v1/*
-      config.url = '/api/v1' + config.url.substring(4);
+      config.url = API_BASE_URL + config.url.substring(4);
     }
     
     return config;

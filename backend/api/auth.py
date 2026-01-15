@@ -14,7 +14,7 @@ from services import user_service
 router = APIRouter()
 
 # OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"auth/login")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):

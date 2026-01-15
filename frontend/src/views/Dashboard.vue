@@ -276,7 +276,7 @@
                           v-if="sensor.type.includes('Relay') && authStore.canEdit"
                           class="btn btn-sm relay-toggle-btn"
                           :class="sensor.value > 0 ? 'btn-warning' : 'btn-success'"
-                          @click.stop.prevent="toggleRelay(deviceData.device.id, sensor)"
+                          @click.stop.prevent="toggleRelay(deviceData.device, sensor)"
                           :disabled="isRelaySending(deviceData.device.id, sensor.type)"
                           :title="sensor.value > 0 ? '关闭继电器' : '开启继电器'"
                         >
@@ -353,21 +353,6 @@ export default {
     // 继电器期望状态映射（deviceId-sensorType -> {value, timestamp, timeout}）
     const relayExpectedStates = ref(new Map())  // 用于乐观更新，避免轮询覆盖
     let refreshInterval = null
-
-    // 获取指定设备的发布主题（用于继电器控制等）
-    const fetchPublishTopic = async (deviceId) => {
-      try {
-        const resp = await axios.get(`/api/devices/${deviceId}/publish-topic`)
-        const topic = resp?.data?.publish_topic
-        if (topic && typeof topic === 'string' && topic.trim()) {
-          return topic.trim()
-        }
-      } catch (e) {
-        console.warn('获取设备发布主题失败，使用按设备隔离的默认主题:', e)
-      }
-      // 后备：按设备隔离，避免多个设备互相影响
-      return `pc/${deviceId}`
-    }
 
     // 计算属性
     const onlineDevices = computed(() => devices.value.filter(d => d.status === '在线' || d.is_online).length)
@@ -697,80 +682,49 @@ export default {
       return sendingRelayId.value === sensorKey || relayToggleLock.value.has(sensorKey)
     }
 
-    // 切换继电器状态（带防抖和锁机制）
-    const toggleRelay = async (deviceId, sensor) => {
+    // 切换继电器状态（简化版：直接使用设备自带的 publish_topic）
+    const toggleRelay = async (device, sensor) => {
+      const deviceId = device.id
       const sensorKey = `${deviceId}-${sensor.type}`
       
-      // 防止重复点击：如果已经在发送中，直接返回
-      if (isRelaySending(deviceId, sensor.type)) {
-        console.log('继电器控制命令正在发送中，忽略重复点击')
-        return
-      }
+      // 防止重复点击
+      if (isRelaySending(deviceId, sensor.type)) return
       
-      // 设置发送状态和锁
+      // 设置状态锁
       sendingRelayId.value = sensorKey
       relayToggleLock.value.add(sensorKey)
       
       try {
-        // 按设备获取发布主题，避免多个设备共用同一主题导致互相影响
-        const topic = await fetchPublishTopic(deviceId)
-        
-        // 根据当前状态决定发送的消息内容
-        // 如果当前是关闭状态(0)，发送 relayon（开启命令）
-        // 如果当前是开启状态(1)，发送 relayoff（关闭命令）
+        // 直接使用后端返回的发布主题，如果不存在则使用兜底
+        const topic = device.publish_topic || `pc/${deviceId}`
         const isCurrentlyOn = sensor.value > 0
         const message = isCurrentlyOn ? 'relayoff' : 'relayon'
         
-        console.log(`发送继电器控制命令: ${topic} - ${message} (设备ID: ${deviceId})`)
+        console.log(`发送继电器控制命令: ${topic} - ${message}`)
         
-        const response = await axios.post('/api/mqtt/publish', {
-          topic: topic,
-          message: message,
+        const response = await axios.post('/api/mqtt-publish/publish', {
+          topic,
+          message,
           qos: 0
         })
         
         if (response.data.success) {
-          // 乐观更新：立即更新本地状态，避免等待MQTT消息
+          // 乐观更新
           const newState = isCurrentlyOn ? 0 : 1
-          
-          // 记录期望状态，防止轮询时被旧数据覆盖
           relayExpectedStates.value.set(sensorKey, {
             value: newState,
             timestamp: Date.now(),
             timeout: 5000
           })
           
-          // 更新设备数据中的传感器值
-          const deviceData = devicesWithSensors.value.find(d => d.device.id === deviceId)
-          if (deviceData) {
-            const sensorToUpdate = deviceData.sensors.find(s => s.type === sensor.type)
-            if (sensorToUpdate) {
-              sensorToUpdate.value = newState
-            }
-          }
-          
-          // 更新过滤后的数据
-          const filteredDeviceData = filteredDevices.value.find(d => d.device.id === deviceId)
-          if (filteredDeviceData) {
-            const sensorToUpdate = filteredDeviceData.sensors.find(s => s.type === sensor.type)
-            if (sensorToUpdate) {
-              sensorToUpdate.value = newState
-            }
-          }
-          
-          console.log(`继电器控制消息已成功发送: ${topic} - ${message}，乐观更新状态为: ${newState}`)
-          
-          // 添加短暂延迟，防止快速连续点击
-          await new Promise(resolve => setTimeout(resolve, 300))
-        } else {
-          console.error('发送控制消息失败: 响应不成功')
-          alert('发送控制消息失败')
+          // 更新本地状态
+          sensor.value = newState
+          console.log(`继电器状态已成功发送，乐观更新为: ${newState}`)
         }
       } catch (error) {
         console.error('发送继电器控制消息失败:', error)
-        alert(`发送控制消息失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
+        alert('发送控制消息失败')
       } finally {
-        // 清除发送状态和锁
         sendingRelayId.value = null
         relayToggleLock.value.delete(sensorKey)
       }

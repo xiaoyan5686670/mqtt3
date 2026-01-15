@@ -41,7 +41,7 @@ const toggleRelay = async () => {
   const isCurrentlyOn = sensorData.value.relay === 1
   const message = isCurrentlyOn ? 'relayoff' : 'relayon'
   
-  const response = await axios.post('/api/mqtt/publish', {
+  const response = await axios.post('/api/mqtt-publish/publish', {
     topic: topic,
     message: message,
     qos: 0
@@ -86,7 +86,7 @@ const toggleRelay = async (deviceId, sensor) => {
   const isCurrentlyOn = sensor.value > 0
   const message = isCurrentlyOn ? 'relayoff' : 'relayon'
   
-  const response = await axios.post('/api/mqtt/publish', {
+  const response = await axios.post('/api/mqtt-publish/publish', {
     topic: topic,
     message: message,
     qos: 0

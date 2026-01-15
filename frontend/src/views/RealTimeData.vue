@@ -337,20 +337,6 @@ export default {
       }
       return texts[range]
     }
-
-    // 获取指定设备的发布主题（用于继电器控制等）
-    const fetchPublishTopic = async (deviceId) => {
-      try {
-        const resp = await axios.get(`/api/devices/${deviceId}/publish-topic`)
-        const topic = resp?.data?.publish_topic
-        if (topic && typeof topic === 'string' && topic.trim()) {
-          return topic.trim()
-        }
-      } catch (e) {
-        console.warn('获取设备发布主题失败，使用按设备隔离的默认主题:', e)
-      }
-      return `pc/${deviceId}`
-    }
     
     // 图表引用
     const chart1Ref = ref(null)
@@ -843,20 +829,35 @@ export default {
       if (chart3) chart3.dispose()
     })
     
+    // 切换继电器状态
     const toggleRelay = async () => {
       if (!selectedDeviceId.value) return
+      
+      const device = devices.value.find(d => d.id == selectedDeviceId.value)
+      if (!device) return
+
       sendingRelay.value = true
       try {
-        const topic = await fetchPublishTopic(selectedDeviceId.value)
+        const topic = device.publish_topic || `pc/${selectedDeviceId.value}`
         const isCurrentlyOn = sensorData.value.relay === 1
         const message = isCurrentlyOn ? 'relayoff' : 'relayon'
-        const response = await axios.post('/api/mqtt/publish', { topic, message, qos: 0 })
+        
+        console.log(`发送继电器控制命令: ${topic} - ${message}`)
+        
+        const response = await axios.post('/api/mqtt-publish/publish', {
+          topic,
+          message,
+          qos: 0
+        })
+        
         if (response.data.success) {
           const newState = isCurrentlyOn ? 0 : 1
           sensorData.value.relay = newState
           relayExpectedState.value = { value: newState, timestamp: Date.now(), timeout: 5000 }
+          console.log(`继电器控制消息已成功发送，乐观更新为: ${newState}`)
         }
       } catch (err) {
+        console.error('继电器控制失败:', err)
         error.value = `控制失败: ${err.message}`
       } finally {
         sendingRelay.value = false
