@@ -166,9 +166,32 @@
 
         <!-- 图表展示区域 -->
         <div v-if="!loadingData" class="trend-section">
-          <div class="section-header mb-4">
-            <h4 class="section-title">趋势数据分析</h4>
-            <div class="section-line"></div>
+          <div class="section-header mb-4 d-flex align-items-center justify-content-between">
+            <div>
+              <h4 class="section-title mb-0">趋势数据分析</h4>
+              <div class="section-line"></div>
+            </div>
+            <div v-if="timeRange === 'month'" class="custom-date-picker d-flex align-items-center bg-white px-3 py-2 rounded-pill shadow-sm">
+              <div class="picker-label me-3 d-none d-md-flex align-items-center">
+                <i class="fas fa-calendar-alt text-primary me-2"></i>
+                <span class="text-muted small fw-600">自定义日期区间</span>
+              </div>
+              <div class="d-flex align-items-center">
+                <input 
+                  type="date" 
+                  v-model="startDate" 
+                  class="date-input" 
+                  @change="refreshData"
+                >
+                <span class="mx-2 text-muted">至</span>
+                <input 
+                  type="date" 
+                  v-model="endDate" 
+                  class="date-input" 
+                  @change="refreshData"
+                >
+              </div>
+            </div>
           </div>
           <div class="row g-4">
             <div class="col-lg-6">
@@ -269,6 +292,29 @@ export default {
     
     // 时间范围：realtime / day / week / month
     const timeRange = ref('realtime')
+
+    // 自定义日期区间（用于月维度）
+    const getInitialDateRange = () => {
+      const now = new Date()
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      
+      const format = (date) => {
+        const y = date.getFullYear()
+        const m = String(date.getMonth() + 1).padStart(2, '0')
+        const d = String(date.getDate()).padStart(2, '0')
+        return `${y}-${m}-${d}`
+      }
+      
+      return {
+        start: format(firstDay),
+        end: format(lastDay)
+      }
+    }
+
+    const initialRange = getInitialDateRange()
+    const startDate = ref(initialRange.start)
+    const endDate = ref(initialRange.end)
 
     // 获取时间范围对应的图标
     const getRangeIcon = (range) => {
@@ -409,10 +455,11 @@ export default {
                 itemStyle: { color: '#FF6384' },
                 lineStyle: { width: 3 },
                 smooth: true,
-                showSymbol: false,
+                showSymbol: true,
+                symbolSize: 8,
                 areaStyle: {
                   color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(255, 99, 132, 0.1)' },
+                    { offset: 0, color: 'rgba(255, 99, 132, 0.2)' },
                     { offset: 1, color: 'rgba(255, 99, 132, 0)' }
                   ])
                 }
@@ -424,10 +471,11 @@ export default {
                 itemStyle: { color: '#36A2EB' },
                 lineStyle: { width: 3 },
                 smooth: true,
-                showSymbol: false,
+                showSymbol: true,
+                symbolSize: 8,
                 areaStyle: {
                   color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(54, 162, 235, 0.1)' },
+                    { offset: 0, color: 'rgba(54, 162, 235, 0.2)' },
                     { offset: 1, color: 'rgba(54, 162, 235, 0)' }
                   ])
                 }
@@ -479,10 +527,11 @@ export default {
                 itemStyle: { color: '#4CAF50' },
                 lineStyle: { width: 3 },
                 smooth: true,
-                showSymbol: false,
+                showSymbol: true,
+                symbolSize: 8,
                 areaStyle: {
                   color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(76, 175, 80, 0.1)' },
+                    { offset: 0, color: 'rgba(76, 175, 80, 0.2)' },
                     { offset: 1, color: 'rgba(76, 175, 80, 0)' }
                   ])
                 }
@@ -494,10 +543,11 @@ export default {
                 itemStyle: { color: '#2196F3' },
                 lineStyle: { width: 3 },
                 smooth: true,
-                showSymbol: false,
+                showSymbol: true,
+                symbolSize: 8,
                 areaStyle: {
                   color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(33, 150, 243, 0.1)' },
+                    { offset: 0, color: 'rgba(33, 150, 243, 0.2)' },
                     { offset: 1, color: 'rgba(33, 150, 243, 0)' }
                   ])
                 }
@@ -607,11 +657,19 @@ export default {
       error.value = ''
 
       try {
+        const params = {
+          limit: timeRange.value === 'month' ? 2000 : 1000
+        }
+
+        if (timeRange.value === 'month') {
+          params.start_time = `${startDate.value}T00:00:00`
+          params.end_time = `${endDate.value}T23:59:59`
+        } else {
+          params.time_range = timeRange.value
+        }
+
         const response = await axios.get(`/api/sensors/device/${selectedDeviceId.value}/history`, {
-          params: {
-            time_range: timeRange.value,
-            limit: timeRange.value === 'day' ? 1000 : 1000
-          }
+          params
         })
 
         const sensors = response.data || []
@@ -649,6 +707,7 @@ export default {
         let timeLabels = []; let temp1Data = []; let temp2Data = []; let hum1Data = []; let hum2Data = [];
 
         if (timeRange.value === 'day') {
+          // 日维度：固定 0-23 小时 X 轴，每小时一个汇总点
           timeLabels = Array.from({ length: 24 }, (_, i) => `${i}`)
           const buckets = Array.from({ length: 24 }, () => ({ t1: [], t2: [], h1: [], h2: [] }))
           sortedTimestamps.forEach(ts => {
@@ -661,13 +720,71 @@ export default {
           const avg = (arr) => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : null
           temp1Data = buckets.map(b => avg(b.t1)); temp2Data = buckets.map(b => avg(b.t2));
           hum1Data = buckets.map(b => avg(b.h1)); hum2Data = buckets.map(b => avg(b.h2));
-        } else {
+        } else if (timeRange.value === 'week') {
+          // 周维度：自然周区间（周一至周日），以天为单位
+          const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+          timeLabels = weekDays
+          
+          // 初始化 7 天的数据桶
+          const buckets = Array.from({ length: 7 }, () => ({ t1: [], t2: [], h1: [], h2: [] }))
+          
           sortedTimestamps.forEach(ts => {
             const date = new Date(ts)
-            const label = timeRange.value === 'week' ? `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:00` : `${date.getMonth()+1}/${date.getDate()}`
-            timeLabels.push(label); temp1Data.push(temp1Map.get(ts) ?? null); temp2Data.push(temp2Map.get(ts) ?? null);
-            hum1Data.push(hum1Map.get(ts) ?? null); hum2Data.push(hum2Map.get(ts) ?? null);
+            let dayIdx = date.getDay() // 0(周日) - 6(周六)
+            // 转换为周一为起始的索引：周一(0) - 周日(6)
+            const mappedIdx = dayIdx === 0 ? 6 : dayIdx - 1
+            
+            if (temp1Map.has(ts)) buckets[mappedIdx].t1.push(temp1Map.get(ts))
+            if (temp2Map.has(ts)) buckets[mappedIdx].t2.push(temp2Map.get(ts))
+            if (hum1Map.has(ts)) buckets[mappedIdx].h1.push(hum1Map.get(ts))
+            if (hum2Map.has(ts)) buckets[mappedIdx].h2.push(hum2Map.get(ts))
           })
+          
+          const avg = (arr) => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : null
+          temp1Data = buckets.map(b => avg(b.t1))
+          temp2Data = buckets.map(b => avg(b.t2))
+          hum1Data = buckets.map(b => avg(b.h1))
+          hum2Data = buckets.map(b => avg(b.h2))
+        } else {
+          // 月维度：按天聚合，显示范围内每一天，处理自然月及平/闰年
+          const start = new Date(startDate.value)
+          const end = new Date(endDate.value)
+          
+          let current = new Date(start)
+          const dayBuckets = []
+          while (current <= end) {
+            dayBuckets.push({
+              date: new Date(current),
+              label: `${current.getMonth() + 1}月${current.getDate()}日`,
+              t1: [], t2: [], h1: [], h2: []
+            })
+            // 使用 setDate(+1) 自动处理跨月、跨年、平闰年逻辑
+            current.setDate(current.getDate() + 1)
+          }
+
+          sortedTimestamps.forEach(ts => {
+            const d = new Date(ts)
+            // 找到对应的日期桶（忽略时分秒）
+            const bucket = dayBuckets.find(b => 
+              b.date.getFullYear() === d.getFullYear() &&
+              b.date.getMonth() === d.getMonth() &&
+              b.date.getDate() === d.getDate()
+            )
+            if (bucket) {
+              if (temp1Map.has(ts)) bucket.t1.push(temp1Map.get(ts))
+              if (temp2Map.has(ts)) bucket.t2.push(temp2Map.get(ts))
+              if (hum1Map.has(ts)) bucket.h1.push(hum1Map.get(ts))
+              if (hum2Map.has(ts)) bucket.h2.push(hum2Map.get(ts))
+            }
+          })
+
+          const avg = (arr) => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : null
+          
+          timeLabels = dayBuckets.map(b => b.label)
+          temp1Data = dayBuckets.map(b => avg(b.t1))
+          temp2Data = dayBuckets.map(b => avg(b.t2))
+          hum1Data = dayBuckets.map(b => avg(b.h1))
+          hum2Data = dayBuckets.map(b => avg(b.h2))
         }
         
         chartData.value = { timeStamps: timeLabels, temp1Data, temp2Data, hum1Data, hum2Data, relayData: [], pb8Data: [] }
@@ -749,7 +866,8 @@ export default {
     return {
       sensorData, devices, selectedDeviceId, loadingData, error, sendingRelay,
       onDeviceChange, chart1Ref, chart2Ref, chart3Ref, refreshData, toggleRelay,
-      timeRange, setTimeRange, getRangeIcon, getRangeText
+      timeRange, setTimeRange, getRangeIcon, getRangeText,
+      startDate, endDate
     }
   }
 }
@@ -941,6 +1059,38 @@ export default {
 /* 趋势图 */
 .section-title { font-weight: 700; color: #1a1a1a; margin-bottom: 0.5rem; }
 .section-line { width: 40px; height: 4px; background: #4facfe; border-radius: 2px; }
+
+.custom-date-picker {
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+}
+
+.custom-date-picker:hover {
+  box-shadow: 0 5px 15px rgba(0,0,0,0.05) !important;
+  border-color: #4facfe;
+}
+
+.picker-label span {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.date-input {
+  border: none;
+  outline: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #495057;
+  cursor: pointer;
+  background: transparent;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.date-input:focus {
+  background: #f8f9fa;
+  color: #4facfe;
+}
 
 .chart-box { border-radius: 1.5rem; }
 .chart-element { height: 350px; width: 100%; }

@@ -231,13 +231,7 @@ class MQTTService:
                     logger.warning(f"转换数值失败: {match.group(1)}, 错误: {e}")
 
     def save_sensor_data(self, device_id: int, sensor_type: str, value: float, unit: str):
-        """保存传感器数据到数据库"""
-        # 检查是否已存在相同类型的传感器数据
-        existing_sensor = self.db.query(SensorDataModel).filter(
-            SensorDataModel.device_id == device_id,
-            SensorDataModel.type == sensor_type
-        ).first()
-        
+        """保存传感器数据到数据库（每次创建新记录，保留历史数据）"""
         # 确定默认的最小值和最大值
         min_value = 0.0
         max_value = 100.0
@@ -255,25 +249,18 @@ class MQTTService:
         elif 'Humidity' in sensor_type and float(value) > 65:
             alert_status = 'alert' if float(value) > 70 else 'warning'
         
-        if existing_sensor:
-            # 更新现有传感器数据
-            existing_sensor.value = value
-            existing_sensor.unit = unit
-            existing_sensor.timestamp = datetime.utcnow()
-            existing_sensor.alert_status = alert_status
-        else:
-            # 创建新的传感器数据
-            sensor_data = SensorDataModel(
-                device_id=device_id,
-                type=sensor_type,
-                value=value,
-                unit=unit,
-                timestamp=datetime.utcnow(),
-                min_value=min_value,
-                max_value=max_value,
-                alert_status=alert_status
-            )
-            self.db.add(sensor_data)
+        # 每次都创建新记录，保留历史数据（用于历史曲线查看）
+        sensor_data = SensorDataModel(
+            device_id=device_id,
+            type=sensor_type,
+            value=value,
+            unit=unit,
+            timestamp=datetime.utcnow(),
+            min_value=min_value,
+            max_value=max_value,
+            alert_status=alert_status
+        )
+        self.db.add(sensor_data)
 
     def start(self) -> bool:
         """启动MQTT服务"""
