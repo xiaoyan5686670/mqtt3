@@ -1,7 +1,10 @@
 """传感器数据服务层"""
 from typing import List, Optional
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+
 from models.sensor import SensorDataModel
 from schemas.sensor import SensorDataCreate, SensorDataUpdate
 
@@ -34,6 +37,44 @@ def get_latest_device_sensors(db: Session, device_id: int) -> List[SensorDataMod
 def get_latest_sensors(db: Session, limit: int = 50) -> List[SensorDataModel]:
     """获取最新的传感器数据"""
     return db.query(SensorDataModel).order_by(desc(SensorDataModel.timestamp)).limit(limit).all()
+
+
+def get_device_sensors_by_time_range(
+    db: Session,
+    device_id: int,
+    sensor_type: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    limit: Optional[int] = None,
+) -> List[SensorDataModel]:
+    """
+    根据时间范围获取设备的传感器数据（用于历史曲线）
+
+    - 可按设备ID、传感器类型、时间范围、数量限制查询
+    - 按时间倒序返回（最新在前）
+    """
+    query = db.query(SensorDataModel).filter(SensorDataModel.device_id == device_id)
+
+    if sensor_type:
+        query = query.filter(SensorDataModel.type == sensor_type)
+
+    if start_time:
+        query = query.filter(SensorDataModel.timestamp >= start_time)
+
+    if end_time:
+        query = query.filter(SensorDataModel.timestamp <= end_time)
+
+    if limit:
+        # 如果提供了限制，获取最新的N条记录（按时间倒序）
+        query = query.order_by(SensorDataModel.timestamp.desc()).limit(limit)
+        # 然后在内存中按时间正序排列，以供图表正确显示
+        results = query.all()
+        results.sort(key=lambda x: x.timestamp)
+        return results
+
+    # 如果没有限制，直接按时间正序返回
+    query = query.order_by(SensorDataModel.timestamp.asc())
+    return query.all()
 
 
 def create_sensor_data(db: Session, sensor_data: SensorDataCreate) -> SensorDataModel:

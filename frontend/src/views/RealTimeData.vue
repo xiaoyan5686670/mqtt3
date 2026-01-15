@@ -1,264 +1,227 @@
 <template>
   <div class="real-time-data">
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="page-title">
-          <i class="fas fa-chart-line me-2"></i>
-          实时传感器数据
-        </h2>
-        <div class="status-indicator">
-          <span :class="['status-dot', { 'status-active': selectedDeviceId }]"></span>
-          <span v-if="selectedDeviceId" class="status-text text-success">已连接</span>
-          <span v-else class="status-text text-muted">未选择设备</span>
-        </div>
-      </div>
-
-      <!-- 设备选择卡片 -->
-      <div class="device-selector-card card shadow-sm">
+    <div class="container-fluid py-4">
+      <!-- 头部控制栏 -->
+      <div class="header-panel card shadow-sm mb-4">
         <div class="card-body p-4">
-          <div class="d-flex flex-column flex-md-row align-items-center">
-            <div class="device-icon me-3 mb-3 mb-md-0">
-              <i class="fas fa-microchip fa-2x text-primary"></i>
+          <div class="row align-items-center">
+            <div class="col-lg-4 col-md-12 mb-3 mb-lg-0">
+              <h2 class="page-title d-flex align-items-center">
+                <div class="title-icon me-3">
+                  <i class="fas fa-chart-line text-white"></i>
+                </div>
+                <span>实时监控中心</span>
+              </h2>
             </div>
-            <div class="w-100">
-              <label for="device-select" class="device-label mb-2">选择要监控的设备</label>
-              <div class="d-flex">
-                <select 
-                  id="device-select"
-                  class="form-select form-select-lg flex-grow-1 me-3" 
-                  v-model="selectedDeviceId"
-                  @change="onDeviceChange"
-                >
-                  <option value="">请选择一个设备...</option>
-                  <option v-for="device in devices" :key="device.id" :value="device.id">
-                    {{ device.name }} ({{ device.location || '未知位置' }})
-                  </option>
-                </select>
-                <button 
-                  class="btn btn-primary btn-lg d-flex align-items-center"
-                  :disabled="!selectedDeviceId"
-                  @click="refreshData"
-                >
-                  <i class="fas fa-sync-alt me-1"></i> 刷新
-                </button>
+            <div class="col-lg-5 col-md-8 mb-3 mb-md-0">
+              <div class="device-select-wrapper">
+                <div class="input-group">
+                  <span class="input-group-text bg-white border-end-0">
+                    <i class="fas fa-microchip text-primary"></i>
+                  </span>
+                  <select 
+                    class="form-select border-start-0 ps-0" 
+                    v-model="selectedDeviceId"
+                    @change="onDeviceChange"
+                  >
+                    <option value="">请选择监控设备...</option>
+                    <option v-for="device in devices" :key="device.id" :value="device.id">
+                      {{ device.name }} ({{ device.location || '默认位置' }})
+                    </option>
+                  </select>
+                  <button 
+                    class="btn btn-primary px-4"
+                    :disabled="!selectedDeviceId"
+                    @click="refreshData"
+                  >
+                    <i class="fas fa-sync-alt me-1"></i> 刷新
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-md-4 text-end">
+              <div class="status-badge" :class="{ 'active': selectedDeviceId }">
+                <span class="pulse-dot"></span>
+                {{ selectedDeviceId ? '设备在线' : '等待选择' }}
               </div>
             </div>
           </div>
         </div>
       </div>
-      
-      <!-- 数据加载状态指示 -->
-      <div v-if="loadingData" class="loading-container text-center my-5 py-5">
-        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-          <span class="visually-hidden">加载中...</span>
+
+      <div v-if="selectedDeviceId">
+        <!-- 维度切换器 -->
+        <div class="time-range-wrapper mb-4 text-center">
+          <div class="btn-group shadow-sm p-1 bg-white rounded-pill d-inline-flex">
+            <button 
+              v-for="range in ['realtime', 'day', 'week', 'month']" 
+              :key="range"
+              type="button" 
+              class="btn rounded-pill px-4 py-2 border-0"
+              :class="timeRange === range ? 'btn-primary shadow-sm' : 'btn-light text-muted'"
+              @click="setTimeRange(range)"
+            >
+              <i :class="getRangeIcon(range)" class="me-2"></i>
+              {{ getRangeText(range) }}
+            </button>
+          </div>
         </div>
-        <h5 class="mt-3">正在加载传感器数据...</h5>
-        <p class="text-muted">从设备获取最新信息</p>
+
+        <!-- 传感器卡片网格 -->
+        <div v-if="!loadingData" class="row g-4 mb-5">
+          <div class="col-xl-4 col-md-6">
+            <div class="sensor-glass-card temperature">
+              <div class="card-overlay"></div>
+              <div class="card-content">
+                <div class="sensor-header mb-4">
+                  <span class="sensor-label">温度监测</span>
+                  <div class="sensor-icon-circle">
+                    <i class="fas fa-temperature-high"></i>
+                  </div>
+                </div>
+                <div class="sensor-values">
+                  <div class="value-item main">
+                    <span class="number">{{ sensorData.temp1 }}</span>
+                    <span class="unit">°C</span>
+                    <span class="sub-label">主传感器</span>
+                  </div>
+                  <div class="value-divider"></div>
+                  <div class="value-item secondary">
+                    <span class="number">{{ sensorData.temp2 }}</span>
+                    <span class="unit">°C</span>
+                    <span class="sub-label">备用传感器</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-4 col-md-6">
+            <div class="sensor-glass-card humidity">
+              <div class="card-overlay"></div>
+              <div class="card-content">
+                <div class="sensor-header mb-4">
+                  <span class="sensor-label">湿度监测</span>
+                  <div class="sensor-icon-circle">
+                    <i class="fas fa-tint"></i>
+                  </div>
+                </div>
+                <div class="sensor-values">
+                  <div class="value-item main">
+                    <span class="number">{{ sensorData.hum1 }}</span>
+                    <span class="unit">%</span>
+                    <span class="sub-label">环境湿度</span>
+                  </div>
+                  <div class="value-divider"></div>
+                  <div class="value-item secondary">
+                    <span class="number">{{ sensorData.hum2 }}</span>
+                    <span class="unit">%</span>
+                    <span class="sub-label">基准湿度</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-4 col-md-12">
+            <div class="sensor-glass-card control">
+              <div class="card-overlay"></div>
+              <div class="card-content">
+                <div class="sensor-header mb-4">
+                  <span class="sensor-label">系统控制</span>
+                  <div class="sensor-icon-circle">
+                    <i class="fas fa-cogs"></i>
+                  </div>
+                </div>
+                <div class="control-items">
+                  <div class="control-row mb-3">
+                    <div class="control-info">
+                      <i class="fas fa-plug me-2" :class="sensorData.relay === 1 ? 'text-warning' : 'text-white-50'"></i>
+                      <span>继电器状态</span>
+                    </div>
+                    <button 
+                      class="control-btn" 
+                      :class="{ 'active': sensorData.relay === 1, 'loading': sendingRelay }"
+                      @click="toggleRelay"
+                      :disabled="sendingRelay"
+                    >
+                      <div v-if="sendingRelay" class="spinner-border spinner-border-sm"></div>
+                      <span v-else>{{ sensorData.relay === 1 ? 'ON' : 'OFF' }}</span>
+                    </button>
+                  </div>
+                  <div class="control-row">
+                    <div class="control-info">
+                      <i class="fas fa-bolt me-2" :class="sensorData.pb8 === 1 ? 'text-warning' : 'text-white-50'"></i>
+                      <span>PB8 逻辑电平</span>
+                    </div>
+                    <div class="status-pill" :class="sensorData.pb8 === 1 ? 'high' : 'low'">
+                      {{ sensorData.pb8 === 1 ? 'HIGH' : 'LOW' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 图表展示区域 -->
+        <div v-if="!loadingData" class="trend-section">
+          <div class="section-header mb-4">
+            <h4 class="section-title">趋势数据分析</h4>
+            <div class="section-line"></div>
+          </div>
+          <div class="row g-4">
+            <div class="col-lg-6">
+              <div class="chart-box card border-0 shadow-sm">
+                <div class="card-body p-4">
+                  <div ref="chart1Ref" class="chart-element"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-6">
+              <div class="chart-box card border-0 shadow-sm">
+                <div class="card-body p-4">
+                  <div ref="chart2Ref" class="chart-element"></div>
+                </div>
+              </div>
+            </div>
+            <div v-if="timeRange === 'realtime'" class="col-12">
+              <div class="chart-box card border-0 shadow-sm">
+                <div class="card-body p-4">
+                  <div ref="chart3Ref" class="chart-element full-width"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div v-if="loadingData" class="loading-state py-5 text-center">
+          <div class="loader-wave">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <p class="mt-4 text-muted fw-500">同步设备数据中...</p>
+        </div>
       </div>
-      
-      <!-- 错误信息 -->
-      <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fas fa-exclamation-triangle me-2"></i>
+
+      <!-- 空状态 -->
+      <div v-if="!selectedDeviceId && !loadingData" class="empty-state-card text-center py-5 shadow-sm bg-white rounded-4">
+        <div class="empty-illustration mb-4">
+          <div class="icon-circle shadow-sm mx-auto">
+            <i class="fas fa-broadcast-tower fa-3x text-primary"></i>
+          </div>
+        </div>
+        <h3 class="mb-3">等待设备连接</h3>
+        <p class="text-muted mb-4 mx-auto" style="max-width: 400px;">
+          请从顶部面板选择一个已注册的物联网设备，系统将自动建立实时数据通道并为您展示多维度的监控图表。
+        </p>
+      </div>
+
+      <!-- 错误提示 -->
+      <div v-if="error" class="error-toast">
+        <i class="fas fa-exclamation-circle me-2"></i>
         {{ error }}
-        <button type="button" class="btn-close" @click="error = ''"></button>
-      </div>
-      
-      <!-- 传感器数据显示区域 -->
-      <div class="sensors-container" v-if="!loadingData && selectedDeviceId">
-        <div class="row g-4">
-          <!-- 温湿度传感器1 -->
-          <div class="col-xl-4 col-md-6">
-            <div class="sensor-card card h-100 border-0 shadow-sm">
-              <div class="card-body sensor-gradient-1 p-4 text-white">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h5 class="card-title mb-3">
-                      <i class="fas fa-thermometer-half me-2"></i>
-                      传感器组 1
-                    </h5>
-                    <div class="sensor-data">
-                      <div class="d-flex justify-content-between mb-2">
-                        <span>温度</span>
-                        <span class="fw-bold fs-5">
-                          <i class="fas fa-temperature-high me-1"></i>
-                          {{ sensorData.temp1 }}°C
-                        </span>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>湿度</span>
-                        <span class="fw-bold fs-5">
-                          <i class="fas fa-tint me-1"></i>
-                          {{ sensorData.hum1 }}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sensor-icon-large">
-                    <i class="fas fa-thermometer-half"></i>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 温湿度传感器2 -->
-          <div class="col-xl-4 col-md-6">
-            <div class="sensor-card card h-100 border-0 shadow-sm">
-              <div class="card-body sensor-gradient-2 p-4 text-white">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h5 class="card-title mb-3">
-                      <i class="fas fa-thermometer-half me-2"></i>
-                      传感器组 2
-                    </h5>
-                    <div class="sensor-data">
-                      <div class="d-flex justify-content-between mb-2">
-                        <span>温度</span>
-                        <span class="fw-bold fs-5">
-                          <i class="fas fa-temperature-high me-1"></i>
-                          {{ sensorData.temp2 }}°C
-                        </span>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>湿度</span>
-                        <span class="fw-bold fs-5">
-                          <i class="fas fa-tint me-1"></i>
-                          {{ sensorData.hum2 }}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sensor-icon-large">
-                    <i class="fas fa-thermometer-half"></i>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 继电器和PB8 -->
-          <div class="col-xl-4 col-md-6">
-            <div class="sensor-card card h-100 border-0 shadow-sm">
-              <div class="card-body sensor-gradient-3 p-4 text-white">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h5 class="card-title mb-3">
-                      <i class="fas fa-toggle-on me-2"></i>
-                      控制组
-                    </h5>
-                    <div class="sensor-data">
-                      <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>继电器状态</span>
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="fw-bold fs-5">
-                            <i class="fas fa-power-off me-1" 
-                               :class="sensorData.relay === 1 ? 'text-warning' : 'text-light'"></i>
-                            <span :class="sensorData.relay === 1 ? 'text-warning' : 'text-light'">
-                              {{ sensorData.relay === 1 ? '开启' : '关闭' }}
-                            </span>
-                          </span>
-                          <button 
-                            class="btn btn-sm"
-                            :class="sensorData.relay === 1 ? 'btn-warning' : 'btn-success'"
-                            @click="toggleRelay"
-                            :disabled="!selectedDeviceId || sendingRelay"
-                            style="min-width: 80px;"
-                          >
-                            <span v-if="sendingRelay">
-                              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                              发送中
-                            </span>
-                            <span v-else>
-                              {{ sensorData.relay === 1 ? '关闭' : '开启' }}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>PB8电平</span>
-                        <span class="fw-bold fs-5">
-                          <i class="fas fa-bolt me-1" 
-                             :class="sensorData.pb8 === 1 ? 'text-warning' : 'text-light'"></i>
-                          <span :class="sensorData.pb8 === 1 ? 'text-warning' : 'text-light'">
-                            {{ sensorData.pb8 === 1 ? '高电平' : '低电平' }}
-                          </span>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sensor-icon-large">
-                    <i class="fas fa-toggle-on"></i>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 趋势图区域 -->
-        <div class="trend-charts-section mt-5">
-          <div class="chart-card card shadow-sm">
-            <div class="card-header bg-white py-4">
-              <h5 class="mb-0 d-flex align-items-center">
-                <i class="fas fa-chart-area me-2 text-primary"></i>
-                传感器数据趋势图
-              </h5>
-            </div>
-            <div class="card-body">
-              <div class="row g-4">
-                <!-- 温湿度传感器1趋势图 -->
-                <div class="col-xl-4 col-md-12">
-                  <div class="chart-container card h-100 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <h6 class="chart-title text-center mb-3">温湿度1趋势</h6>
-                      <div ref="chart1Ref" class="chart-wrapper"></div>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- 温湿度传感器2趋势图 -->
-                <div class="col-xl-4 col-md-12">
-                  <div class="chart-container card h-100 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <h6 class="chart-title text-center mb-3">温湿度2趋势</h6>
-                      <div ref="chart2Ref" class="chart-wrapper"></div>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- 继电器和PB8趋势图 -->
-                <div class="col-xl-4 col-md-12">
-                  <div class="chart-container card h-100 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <h6 class="chart-title text-center mb-3">控制状态趋势</h6>
-                      <div ref="chart3Ref" class="chart-wrapper"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 提示信息，当未选择设备时显示 -->
-      <div v-if="!selectedDeviceId && !loadingData" class="no-device-selected text-center my-5 py-5">
-        <div class="empty-state-icon mx-auto mb-4">
-          <i class="fas fa-microchip fa-3x text-light"></i>
-        </div>
-        <h5 class="text-muted">请选择一个设备以开始监控</h5>
-        <p class="text-muted mb-4">从上方下拉菜单中选择一个设备，以查看其实时传感器数据和趋势图</p>
-        <div class="empty-state-features d-flex justify-content-center flex-wrap gap-3">
-          <div class="feature-item px-3 py-2">
-            <i class="fas fa-chart-line me-1"></i> 实时数据
-          </div>
-          <div class="feature-item px-3 py-2">
-            <i class="fas fa-history me-1"></i> 历史趋势
-          </div>
-          <div class="feature-item px-3 py-2">
-            <i class="fas fa-plug me-1"></i> 设备控制
-          </div>
-        </div>
+        <button class="btn-close btn-close-white ms-3" @click="error = ''"></button>
       </div>
     </div>
   </div>
@@ -303,6 +266,31 @@ export default {
       timestamp: 0,  // 最后操作的时间戳
       timeout: 5000  // 超时时间（5秒），超过这个时间后不再保护
     })
+    
+    // 时间范围：realtime / day / week / month
+    const timeRange = ref('realtime')
+
+    // 获取时间范围对应的图标
+    const getRangeIcon = (range) => {
+      const icons = {
+        realtime: 'fas fa-bolt',
+        day: 'fas fa-calendar-day',
+        week: 'fas fa-calendar-week',
+        month: 'fas fa-calendar-alt'
+      }
+      return icons[range]
+    }
+
+    // 获取时间范围对应的文字
+    const getRangeText = (range) => {
+      const texts = {
+        realtime: '实时',
+        day: '日维度',
+        week: '周趋势',
+        month: '月分析'
+      }
+      return texts[range]
+    }
 
     // 获取指定设备的发布主题（用于继电器控制等）
     const fetchPublishTopic = async (deviceId) => {
@@ -315,7 +303,6 @@ export default {
       } catch (e) {
         console.warn('获取设备发布主题失败，使用按设备隔离的默认主题:', e)
       }
-      // 后备：按设备隔离，避免多个设备互相影响
       return `pc/${deviceId}`
     }
     
@@ -329,7 +316,7 @@ export default {
     let chart2 = null
     let chart3 = null
     
-    // 图表数据 - 保存最近20个数据点
+    // 图表数据
     const chartData = ref({
       timeStamps: [],
       temp1Data: [],
@@ -351,18 +338,15 @@ export default {
       }
     }
     
-    // 更新图表 - 改为显示时间序列数据
-    const updateCharts = () => {
-      // 当前时间戳
+    // 更新图表（实时模式）
+    const updateChartsRealtime = () => {
       const now = new Date().toLocaleTimeString()
       
-      // 更新时间轴数据 - 保留最近20个数据点
       chartData.value.timeStamps.push(now)
       if(chartData.value.timeStamps.length > 20) {
         chartData.value.timeStamps.shift()
       }
       
-      // 更新传感器数据
       chartData.value.temp1Data.push(sensorData.value.temp1)
       chartData.value.hum1Data.push(sensorData.value.hum1)
       chartData.value.temp2Data.push(sensorData.value.temp2)
@@ -370,7 +354,6 @@ export default {
       chartData.value.relayData.push(sensorData.value.relay)
       chartData.value.pb8Data.push(sensorData.value.pb8)
       
-      // 限制数据长度为20个点
       if(chartData.value.temp1Data.length > 20) chartData.value.temp1Data.shift()
       if(chartData.value.hum1Data.length > 20) chartData.value.hum1Data.shift()
       if(chartData.value.temp2Data.length > 20) chartData.value.temp2Data.shift()
@@ -378,130 +361,146 @@ export default {
       if(chartData.value.relayData.length > 20) chartData.value.relayData.shift()
       if(chartData.value.pb8Data.length > 20) chartData.value.pb8Data.shift()
       
-      // 确保DOM已更新后再初始化或更新图表
+      renderCharts()
+    }
+    
+    // 渲染图表
+    const renderCharts = () => {
       nextTick(() => {
-        // 图表1 - 温湿度传感器1
+        // 图表1 - 温度趋势
         if (chart1Ref.value) {
-          if (!chart1) {
-            chart1 = echarts.init(chart1Ref.value)
-          }
+          if (chart1) { chart1.dispose(); chart1 = null; }
+          chart1 = echarts.init(chart1Ref.value)
+          
           const option1 = {
             title: {
-              text: '温湿度1趋势',
-              left: 'center',
-              textStyle: { fontSize: 14 }
+              text: '温度趋势 (℃)',
+              left: 'left',
+              textStyle: { fontSize: 16, fontWeight: 'bold', color: '#333' }
             },
             tooltip: {
-              trigger: 'axis'
+              trigger: 'axis',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              borderWidth: 1,
+              borderColor: '#eee',
+              padding: [10, 15],
+              axisPointer: { type: 'line', lineStyle: { color: '#aaa', type: 'dashed' } }
             },
-            legend: {
-              data: ['温度', '湿度'],
-              top: 20
-            },
+            legend: { data: ['温度1', '温度2'], top: 0, right: 0, icon: 'circle' },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
             xAxis: {
               type: 'category',
-              boundaryGap: false,
-              data: chartData.value.timeStamps
+              boundaryGap: timeRange.value !== 'day',
+              data: chartData.value.timeStamps,
+              axisLine: { lineStyle: { color: '#eee' } },
+              axisLabel: { color: '#999', rotate: timeRange.value === 'day' ? 0 : 30 }
             },
-            yAxis: [
-              {
-                type: 'value',
-                name: '温度 (°C)',
-                position: 'left',
-                min: 0,
-                max: 50
-              },
-              {
-                type: 'value',
-                name: '湿度 (%)',
-                position: 'right',
-                min: 0,
-                max: 100,
-                axisLabel: {
-                  show: true
-                }
-              }
-            ],
+            yAxis: {
+              type: 'value',
+              splitLine: { lineStyle: { type: 'dashed', color: '#f5f5f5' } },
+              axisLine: { show: false },
+              scale: true
+            },
             series: [
               {
-                name: '温度',
+                name: '温度1',
                 type: 'line',
-                yAxisIndex: 0,
                 data: chartData.value.temp1Data,
                 itemStyle: { color: '#FF6384' },
-                smooth: true
+                lineStyle: { width: 3 },
+                smooth: true,
+                showSymbol: false,
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(255, 99, 132, 0.1)' },
+                    { offset: 1, color: 'rgba(255, 99, 132, 0)' }
+                  ])
+                }
               },
               {
-                name: '湿度',
+                name: '温度2',
                 type: 'line',
-                yAxisIndex: 1,
-                data: chartData.value.hum1Data,
+                data: chartData.value.temp2Data,
                 itemStyle: { color: '#36A2EB' },
-                smooth: true
+                lineStyle: { width: 3 },
+                smooth: true,
+                showSymbol: false,
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(54, 162, 235, 0.1)' },
+                    { offset: 1, color: 'rgba(54, 162, 235, 0)' }
+                  ])
+                }
               }
             ]
           }
           chart1.setOption(option1, { notMerge: true })
         }
         
-        // 图表2 - 温湿度传感器2
+        // 图表2 - 湿度趋势
         if (chart2Ref.value) {
-          if (!chart2) {
-            chart2 = echarts.init(chart2Ref.value)
-          }
+          if (chart2) { chart2.dispose(); chart2 = null; }
+          chart2 = echarts.init(chart2Ref.value)
+          
           const option2 = {
             title: {
-              text: '温湿度2趋势',
-              left: 'center',
-              textStyle: { fontSize: 14 }
+              text: '湿度趋势 (%)',
+              left: 'left',
+              textStyle: { fontSize: 16, fontWeight: 'bold', color: '#333' }
             },
             tooltip: {
-              trigger: 'axis'
+              trigger: 'axis',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              borderWidth: 1,
+              borderColor: '#eee',
+              padding: [10, 15],
+              axisPointer: { type: 'line', lineStyle: { color: '#aaa', type: 'dashed' } }
             },
-            legend: {
-              data: ['温度', '湿度'],
-              top: 20
-            },
+            legend: { data: ['湿度1', '湿度2'], top: 0, right: 0, icon: 'circle' },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
             xAxis: {
               type: 'category',
-              boundaryGap: false,
-              data: chartData.value.timeStamps
+              boundaryGap: timeRange.value !== 'day',
+              data: chartData.value.timeStamps,
+              axisLine: { lineStyle: { color: '#eee' } },
+              axisLabel: { color: '#999', rotate: timeRange.value === 'day' ? 0 : 30 }
             },
-            yAxis: [
-              {
-                type: 'value',
-                name: '温度 (°C)',
-                position: 'left',
-                min: 0,
-                max: 50
-              },
-              {
-                type: 'value',
-                name: '湿度 (%)',
-                position: 'right',
-                min: 0,
-                max: 100,
-                axisLabel: {
-                  show: true
-                }
-              }
-            ],
+            yAxis: {
+              type: 'value',
+              splitLine: { lineStyle: { type: 'dashed', color: '#f5f5f5' } },
+              axisLine: { show: false },
+              scale: true
+            },
             series: [
               {
-                name: '温度',
+                name: '湿度1',
                 type: 'line',
-                yAxisIndex: 0,
-                data: chartData.value.temp2Data,
-                itemStyle: { color: '#FF6384' },
-                smooth: true
+                data: chartData.value.hum1Data,
+                itemStyle: { color: '#4CAF50' },
+                lineStyle: { width: 3 },
+                smooth: true,
+                showSymbol: false,
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(76, 175, 80, 0.1)' },
+                    { offset: 1, color: 'rgba(76, 175, 80, 0)' }
+                  ])
+                }
               },
               {
-                name: '湿度',
+                name: '湿度2',
                 type: 'line',
-                yAxisIndex: 1,
                 data: chartData.value.hum2Data,
-                itemStyle: { color: '#36A2EB' },
-                smooth: true
+                itemStyle: { color: '#2196F3' },
+                lineStyle: { width: 3 },
+                smooth: true,
+                showSymbol: false,
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(33, 150, 243, 0.1)' },
+                    { offset: 1, color: 'rgba(33, 150, 243, 0)' }
+                  ])
+                }
               }
             ]
           }
@@ -509,33 +508,28 @@ export default {
         }
         
         // 图表3 - 继电器和PB8
-        if (chart3Ref.value) {
-          if (!chart3) {
-            chart3 = echarts.init(chart3Ref.value)
-          }
+        if (timeRange.value === 'realtime' && chart3Ref.value) {
+          if (!chart3) chart3 = echarts.init(chart3Ref.value)
           const option3 = {
             title: {
               text: '控制状态趋势',
-              left: 'center',
-              textStyle: { fontSize: 14 }
+              left: 'left',
+              textStyle: { fontSize: 16, fontWeight: 'bold', color: '#333' }
             },
-            tooltip: {
-              trigger: 'axis'
-            },
-            legend: {
-              data: ['继电器', 'PB8'],
-              top: 20
-            },
+            tooltip: { trigger: 'axis' },
+            legend: { data: ['继电器', 'PB8'], top: 0, right: 0, icon: 'rect' },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
             xAxis: {
               type: 'category',
               boundaryGap: false,
-              data: chartData.value.timeStamps
+              data: chartData.value.timeStamps,
+              axisLine: { lineStyle: { color: '#eee' } }
             },
             yAxis: {
               type: 'value',
-              min: 0,
-              max: 1,
-              interval: 1
+              min: 0, max: 1, interval: 1,
+              axisLabel: { formatter: (v) => v === 1 ? 'ON/高' : 'OFF/低' },
+              splitLine: { lineStyle: { type: 'dashed', color: '#f5f5f5' } }
             },
             series: [
               {
@@ -544,7 +538,7 @@ export default {
                 step: 'start',
                 data: chartData.value.relayData,
                 itemStyle: { color: '#4CAF50' },
-                areaStyle: {}
+                areaStyle: { color: 'rgba(76, 175, 80, 0.05)' }
               },
               {
                 name: 'PB8',
@@ -552,7 +546,7 @@ export default {
                 step: 'start',
                 data: chartData.value.pb8Data,
                 itemStyle: { color: '#2196F3' },
-                areaStyle: {}
+                areaStyle: { color: 'rgba(33, 150, 243, 0.05)' }
               }
             ]
           }
@@ -563,204 +557,150 @@ export default {
     
     // 获取实时数据
     const fetchRealTimeData = async () => {
-      if (!selectedDeviceId.value) {
-        error.value = '请先选择一个设备'
-        return
-      }
+      if (!selectedDeviceId.value) return
       
-      // 只在首次加载时显示loading状态
-      if (chartData.value.timeStamps.length === 0) {
-        loadingData.value = true
-      }
+      if (chartData.value.timeStamps.length === 0) loadingData.value = true
       error.value = ''
       
       try {
-        // 获取指定设备的最新传感器数据
         const response = await axios.get(`/api/devices/${selectedDeviceId.value}/latest-sensors`)
-        console.log('API Response:', response.data) // 调试信息
-        
-        // 临时存储数据，以便在出错时保留旧数据
+        const sensors = response.data
         const tempSensorData = { ...sensorData.value }
         
-        // 重置数据
-        tempSensorData.temp1 = 0
-        tempSensorData.hum1 = 0
-        tempSensorData.temp2 = 0
-        tempSensorData.hum2 = 0
-        tempSensorData.relay = 0
-        tempSensorData.pb8 = 0
-        
-        const sensors = response.data
-        
-        console.log(`找到 ${sensors.length} 个传感器数据`) // 调试信息
+        // 重置
+        tempSensorData.temp1 = 0; tempSensorData.hum1 = 0;
+        tempSensorData.temp2 = 0; tempSensorData.hum2 = 0;
+        tempSensorData.relay = 0; tempSensorData.pb8 = 0;
         
         for (const sensor of sensors) {
-          console.log('Processing sensor:', sensor) // 调试信息
-          if (sensor.type === 'Temperature1') {
-            tempSensorData.temp1 = sensor.value
-          } else if (sensor.type === 'Humidity1') {
-            tempSensorData.hum1 = sensor.value
-          } else if (sensor.type === 'Temperature2') {
-            tempSensorData.temp2 = sensor.value
-          } else if (sensor.type === 'Humidity2') {
-            tempSensorData.hum2 = sensor.value
-          } else if (sensor.type === 'Relay Status') {
-            // 处理继电器状态：如果有待确认的期望状态，需要特殊处理
+          if (sensor.type === 'Temperature1') tempSensorData.temp1 = sensor.value
+          else if (sensor.type === 'Humidity1') tempSensorData.hum1 = sensor.value
+          else if (sensor.type === 'Temperature2') tempSensorData.temp2 = sensor.value
+          else if (sensor.type === 'Humidity2') tempSensorData.hum2 = sensor.value
+          else if (sensor.type === 'Relay Status') {
             const now = Date.now()
             const timeSinceOperation = now - relayExpectedState.value.timestamp
-            
             if (relayExpectedState.value.value !== null && timeSinceOperation < relayExpectedState.value.timeout) {
-              // 在保护期内，检查新数据是否与期望状态一致
-              if (sensor.value === relayExpectedState.value.value) {
-                // 状态已确认，清除期望状态
-                console.log(`继电器状态已确认: ${sensor.value}，清除期望状态保护`)
-                relayExpectedState.value.value = null
-                tempSensorData.relay = sensor.value
-              } else {
-                // 状态不一致，可能是旧数据，保持期望状态
-                console.log(`继电器状态不一致（期望: ${relayExpectedState.value.value}, 收到: ${sensor.value}），保持期望状态`)
-                tempSensorData.relay = relayExpectedState.value.value
-              }
+              tempSensorData.relay = sensor.value === relayExpectedState.value.value ? sensor.value : relayExpectedState.value.value
+              if (sensor.value === relayExpectedState.value.value) relayExpectedState.value.value = null
             } else {
-              // 超过保护期或没有期望状态，直接使用服务器数据
-              if (relayExpectedState.value.value !== null && timeSinceOperation >= relayExpectedState.value.timeout) {
-                console.log(`继电器状态保护期已过，使用服务器数据: ${sensor.value}`)
-                relayExpectedState.value.value = null
-              }
+              relayExpectedState.value.value = null
               tempSensorData.relay = sensor.value
             }
-          } else if (sensor.type === 'PB8 Level') {
-            tempSensorData.pb8 = sensor.value
-          }
+          } else if (sensor.type === 'PB8 Level') tempSensorData.pb8 = sensor.value
         }
         
-        // 检查是否有传感器数据
-        if (sensors.length === 0) {
-          console.log('没有找到任何传感器数据')
-          error.value = '该设备暂无传感器数据，请确认设备是否正常发送数据'
-        }
-        
-        // 只有在成功处理完数据后才更新实际的数据
         sensorData.value = tempSensorData
-        
-        console.log('Updated sensor data:', sensorData.value) // 调试信息
-        
-        // 更新图表
-        updateCharts()
+        if (timeRange.value === 'realtime') updateChartsRealtime()
       } catch (err) {
         console.error('获取实时数据失败:', err)
-        error.value = `获取数据失败: ${err.message || '未知错误'}`
-        
-        // 不要清空现有数据，保留最后一次有效数据
-        // 但仍然需要更新图表，以确保时间轴继续前进
-        const now = new Date().toLocaleTimeString()
-        
-        // 添加时间戳，但保持现有数据不变
-        chartData.value.timeStamps.push(now)
-        if(chartData.value.timeStamps.length > 20) {
-          chartData.value.timeStamps.shift()
-        }
-        
-        // 添加当前传感器值，保持趋势线的连续性
-        chartData.value.temp1Data.push(sensorData.value.temp1)
-        chartData.value.hum1Data.push(sensorData.value.hum1)
-        chartData.value.temp2Data.push(sensorData.value.temp2)
-        chartData.value.hum2Data.push(sensorData.value.hum2)
-        chartData.value.relayData.push(sensorData.value.relay)
-        chartData.value.pb8Data.push(sensorData.value.pb8)
-        
-        // 限制数据长度为20个点
-        if(chartData.value.temp1Data.length > 20) chartData.value.temp1Data.shift()
-        if(chartData.value.hum1Data.length > 20) chartData.value.hum1Data.shift()
-        if(chartData.value.temp2Data.length > 20) chartData.value.temp2Data.shift()
-        if(chartData.value.hum2Data.length > 20) chartData.value.hum2Data.shift()
-        if(chartData.value.relayData.length > 20) chartData.value.relayData.shift()
-        if(chartData.value.pb8Data.length > 20) chartData.value.pb8Data.shift()
-        
-        // 仍然需要更新图表以显示时间的前进
-        nextTick(() => {
-          if (chart1) chart1.setOption({
-            xAxis: {
-              data: chartData.value.timeStamps
-            },
-            series: [
-              { data: chartData.value.temp1Data },
-              { data: chartData.value.hum1Data }
-            ]
-          }, { notMerge: true })
-          
-          if (chart2) chart2.setOption({
-            xAxis: {
-              data: chartData.value.timeStamps
-            },
-            series: [
-              { data: chartData.value.temp2Data },
-              { data: chartData.value.hum2Data }
-            ]
-          }, { notMerge: true })
-          
-          if (chart3) chart3.setOption({
-            xAxis: {
-              data: chartData.value.timeStamps
-            },
-            series: [
-              { data: chartData.value.relayData },
-              { data: chartData.value.pb8Data }
-            ]
-          }, { notMerge: true })
-        })
+        error.value = `获取数据失败: ${err.message}`
       } finally {
-        // 只在首次加载时隐藏loading状态
-        if (chartData.value.timeStamps.length === 1) {
+        loadingData.value = false
+      }
+    }
+    
+    // 加载历史数据
+    const loadHistoryData = async () => {
+      if (!selectedDeviceId.value) return
+      loadingData.value = true
+      error.value = ''
+
+      try {
+        const response = await axios.get(`/api/sensors/device/${selectedDeviceId.value}/history`, {
+          params: {
+            time_range: timeRange.value,
+            limit: timeRange.value === 'day' ? 1000 : 1000
+          }
+        })
+
+        const sensors = response.data || []
+        if (sensors.length === 0) {
+          chartData.value = { timeStamps: [], temp1Data: [], hum1Data: [], temp2Data: [], hum2Data: [], relayData: [], pb8Data: [] }
           loadingData.value = false
+          renderCharts()
+          return
         }
+
+        const dataMap = { Temperature1: [], Temperature2: [], Humidity1: [], Humidity2: [] }
+        sensors.forEach(item => {
+          if (dataMap[item.type]) {
+            let tsStr = item.timestamp
+            if (!tsStr.endsWith('Z') && !tsStr.includes('+')) tsStr += 'Z'
+            const timestamp = new Date(tsStr)
+            dataMap[item.type].push({ timestamp: timestamp.getTime(), value: parseFloat(item.value) })
+          }
+        })
+
+        const allTimestamps = new Set()
+        Object.values(dataMap).forEach(arr => arr.forEach(item => allTimestamps.add(item.timestamp)))
+        const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b)
+        
+        const createMap = (arr) => {
+          const m = new Map()
+          arr.forEach(item => m.set(item.timestamp, item.value))
+          return m
+        }
+        const temp1Map = createMap(dataMap.Temperature1)
+        const temp2Map = createMap(dataMap.Temperature2)
+        const hum1Map = createMap(dataMap.Humidity1)
+        const hum2Map = createMap(dataMap.Humidity2)
+
+        let timeLabels = []; let temp1Data = []; let temp2Data = []; let hum1Data = []; let hum2Data = [];
+
+        if (timeRange.value === 'day') {
+          timeLabels = Array.from({ length: 24 }, (_, i) => `${i}`)
+          const buckets = Array.from({ length: 24 }, () => ({ t1: [], t2: [], h1: [], h2: [] }))
+          sortedTimestamps.forEach(ts => {
+            const h = new Date(ts).getHours()
+            if (temp1Map.has(ts)) buckets[h].t1.push(temp1Map.get(ts))
+            if (temp2Map.has(ts)) buckets[h].t2.push(temp2Map.get(ts))
+            if (hum1Map.has(ts)) buckets[h].h1.push(hum1Map.get(ts))
+            if (hum2Map.has(ts)) buckets[h].h2.push(hum2Map.get(ts))
+          })
+          const avg = (arr) => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : null
+          temp1Data = buckets.map(b => avg(b.t1)); temp2Data = buckets.map(b => avg(b.t2));
+          hum1Data = buckets.map(b => avg(b.h1)); hum2Data = buckets.map(b => avg(b.h2));
+        } else {
+          sortedTimestamps.forEach(ts => {
+            const date = new Date(ts)
+            const label = timeRange.value === 'week' ? `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:00` : `${date.getMonth()+1}/${date.getDate()}`
+            timeLabels.push(label); temp1Data.push(temp1Map.get(ts) ?? null); temp2Data.push(temp2Map.get(ts) ?? null);
+            hum1Data.push(hum1Map.get(ts) ?? null); hum2Data.push(hum2Map.get(ts) ?? null);
+          })
+        }
+        
+        chartData.value = { timeStamps: timeLabels, temp1Data, temp2Data, hum1Data, hum2Data, relayData: [], pb8Data: [] }
+        loadingData.value = false
+        await nextTick(); renderCharts()
+      } catch (err) {
+        console.error('加载历史数据失败:', err)
+        error.value = `加载历史数据失败: ${err.message}`
+      } finally {
+        loadingData.value = false
       }
     }
-    
-    // 设备选择变化时的处理
+
     const onDeviceChange = () => {
-      // 保存设备选择到本地存储
       localStorage.setItem('selectedDeviceId', selectedDeviceId.value)
-      
-      // 清空图表数据，准备显示新设备的数据
-      chartData.value = {
-        timeStamps: [],
-        temp1Data: [],
-        hum1Data: [],
-        temp2Data: [],
-        hum2Data: [],
-        relayData: [],
-        pb8Data: []
-      }
-      
-      // 重新获取数据
-      fetchRealTimeData()
+      chartData.value = { timeStamps: [], temp1Data: [], hum1Data: [], temp2Data: [], hum2Data: [], relayData: [], pb8Data: [] }
+      if (timeRange.value === 'realtime') fetchRealTimeData()
+      else loadHistoryData()
     }
     
-    // 从本地存储加载设备选择
-    const loadSelectedDevice = () => {
-      const savedDeviceId = localStorage.getItem('selectedDeviceId')
-      if (savedDeviceId && devices.value.some(device => device.id == savedDeviceId)) {
-        selectedDeviceId.value = savedDeviceId
-      }
+    const setTimeRange = (range) => {
+      if (timeRange.value === range) return
+      timeRange.value = range
+      chartData.value = { timeStamps: [], temp1Data: [], hum1Data: [], temp2Data: [], hum2Data: [], relayData: [], pb8Data: [] }
+      if (range === 'realtime') fetchRealTimeData()
+      else loadHistoryData()
     }
     
-    // 初始化图表
-    const initCharts = async () => {
-      await nextTick() // 确保DOM已更新
-      
-      // 如果已有选中设备，获取数据
-      if (selectedDeviceId.value) {
-        fetchRealTimeData()
-      }
-    }
-    
-    // 手动刷新数据
     const refreshData = () => {
-      fetchRealTimeData()
+      if (timeRange.value === 'realtime') fetchRealTimeData()
+      else loadHistoryData()
     }
     
-    // 处理窗口大小变化
     const handleResize = () => {
       if (chart1) chart1.resize()
       if (chart2) chart2.resize()
@@ -768,113 +708,48 @@ export default {
     }
     
     onMounted(async () => {
-      // 获取设备列表
       await fetchDevices()
-      
-      // 等待设备列表加载完成后再加载选中的设备
-      loadSelectedDevice()
-      
-      // 初始化图表
-      await initCharts()
-      
-      // 如果有选中的设备，立即获取数据
-      if (selectedDeviceId.value) {
-        fetchRealTimeData()
-      }
-      
-      // 监听窗口大小变化
+      const saved = localStorage.getItem('selectedDeviceId')
+      if (saved && devices.value.some(d => d.id == saved)) selectedDeviceId.value = saved
+      if (selectedDeviceId.value) fetchRealTimeData()
       window.addEventListener('resize', handleResize)
-      
-      // 设置定时更新（每3秒更新一次）
-      const interval = setInterval(() => {
-        if (selectedDeviceId.value) {
-          fetchRealTimeData()
-        }
+      window.realtimeInterval = setInterval(() => {
+        if (selectedDeviceId.value && timeRange.value === 'realtime') fetchRealTimeData()
       }, 3000)
-      
-      // 保存interval ID以便在组件卸载时清理
-      window.realtimeInterval = interval
     })
     
     onUnmounted(() => {
-      // 清理定时器
-      if (window.realtimeInterval) {
-        clearInterval(window.realtimeInterval)
-        window.realtimeInterval = null
-      }
-      
-      // 移除事件监听器
+      if (window.realtimeInterval) clearInterval(window.realtimeInterval)
       window.removeEventListener('resize', handleResize)
-      
-      // 销毁图表实例
       if (chart1) chart1.dispose()
       if (chart2) chart2.dispose()
       if (chart3) chart3.dispose()
     })
     
-    // 切换继电器状态
     const toggleRelay = async () => {
-      if (!selectedDeviceId.value) {
-        error.value = '请先选择一个设备'
-        return
-      }
-      
+      if (!selectedDeviceId.value) return
       sendingRelay.value = true
-      error.value = ''
-      
       try {
-        // 按设备获取发布主题，避免多个设备共用同一主题导致互相影响
         const topic = await fetchPublishTopic(selectedDeviceId.value)
-        
-        // 根据当前状态决定发送的消息内容
-        // 如果当前是关闭状态(0)，发送 relayon（开启命令）
-        // 如果当前是开启状态(1)，发送 relayoff（关闭命令）
         const isCurrentlyOn = sensorData.value.relay === 1
         const message = isCurrentlyOn ? 'relayoff' : 'relayon'
-        
-        const response = await axios.post('/api/mqtt/publish', {
-          topic: topic,
-          message: message,
-          qos: 0
-        })
-        
+        const response = await axios.post('/api/mqtt/publish', { topic, message, qos: 0 })
         if (response.data.success) {
-          // 乐观更新：立即更新本地状态，避免等待MQTT消息
           const newState = isCurrentlyOn ? 0 : 1
           sensorData.value.relay = newState
-          
-          // 记录期望状态，防止轮询时被旧数据覆盖
-          relayExpectedState.value = {
-            value: newState,
-            timestamp: Date.now(),
-            timeout: 5000
-          }
-          
-          console.log(`继电器控制消息已发送: ${topic}，乐观更新状态为: ${newState}`)
-        } else {
-          error.value = '发送控制消息失败'
+          relayExpectedState.value = { value: newState, timestamp: Date.now(), timeout: 5000 }
         }
       } catch (err) {
-        console.error('发送继电器控制消息失败:', err)
-        error.value = `发送控制消息失败: ${err.response?.data?.detail || err.message || '未知错误'}`
+        error.value = `控制失败: ${err.message}`
       } finally {
         sendingRelay.value = false
       }
     }
     
     return {
-      sensorData,
-      devices,
-      selectedDeviceId,
-      loadingData,
-      error,
-      sendingRelay,
-      onDeviceChange,
-      chart1Ref,
-      chart2Ref,
-      chart3Ref,
-      refreshData,
-      toggleRelay
+      sensorData, devices, selectedDeviceId, loadingData, error, sendingRelay,
+      onDeviceChange, chart1Ref, chart2Ref, chart3Ref, refreshData, toggleRelay,
+      timeRange, setTimeRange, getRangeIcon, getRangeText
     }
   }
 }
@@ -882,341 +757,238 @@ export default {
 
 <style scoped>
 .real-time-data {
-  padding: 20px;
-  background-color: #f8f9fa;
   min-height: 100vh;
+  background-color: #f0f2f5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-.container-fluid {
-  max-width: 1400px;
-}
-
-.page-title {
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 1.8rem;
-  margin-bottom: 0;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.status-active {
-  background-color: #28a745;
-  box-shadow: 0 0 10px #28a745;
-}
-
-.status-text {
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.device-selector-card {
-  border-radius: 12px;
-  margin-bottom: 30px;
+/* 头部面板 */
+.header-panel {
   border: none;
+  border-radius: 1.25rem;
   background: white;
 }
 
-.device-icon {
-  width: 60px;
-  height: 60px;
+.title-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 123, 255, 0.1);
-  border-radius: 12px;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
 }
 
-.device-label {
-  font-weight: 500;
-  color: #495057;
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
-}
-
-.form-select-lg {
-  padding: 0.75rem 1rem;
-  font-size: 1.1rem;
-  border-radius: 8px;
-  border: 2px solid #e9ecef;
-}
-
-.loading-container {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-}
-
-.sensors-container {
-  margin-top: 20px;
-}
-
-.sensor-card {
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  height: 100%;
-}
-
-.sensor-gradient-1 {
-  background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-}
-
-.sensor-gradient-2 {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
-
-.sensor-gradient-3 {
-  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
-}
-
-.sensor-data {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 12px;
-  margin-top: 15px;
-}
-
-.sensor-icon-large {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.page-title span {
   font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: -0.5px;
 }
 
-.chart-card {
-  border: none;
+/* 设备选择 */
+.device-select-wrapper .input-group {
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
 }
 
-.chart-container {
-  border-radius: 10px;
-  overflow: hidden;
-  background-color: white;
+.device-select-wrapper .form-select {
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border-color: #eee;
+  background-color: #fff;
 }
 
-.chart-title {
-  font-weight: 600;
-  color: #495057;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
+.device-select-wrapper .form-select:focus {
+  box-shadow: none;
+  border-color: #4facfe;
 }
 
-.chart-wrapper {
-  height: 300px;
-  width: 100%;
-}
-
-.trend-charts-section {
-  margin-top: 30px;
-}
-
-.no-device-selected {
-  background-color: white;
-  border-radius: 12px;
-  padding: 40px 20px;
-  margin-top: 20px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-}
-
-.empty-state-icon {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  display: flex;
+/* 状态标签 */
+.status-badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  padding: 0.5rem 1.25rem;
   background: #f8f9fa;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.empty-state-features {
-  max-width: 600px;
-}
-
-.feature-item {
-  background: #f8f9fa;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  border-radius: 100px;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: #6c757d;
-  border: 1px solid #e9ecef;
+  transition: all 0.3s ease;
 }
 
-.alert {
-  border-radius: 8px;
+.status-badge.active {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
 }
 
-.shadow-sm {
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: currentColor;
+  border-radius: 50%;
+  margin-right: 10px;
+  position: relative;
 }
 
-.me-1 {
-  margin-right: 0.25rem;
+.active .pulse-dot::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background-color: currentColor;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
 }
 
-.me-2 {
-  margin-right: 0.5rem;
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(3); opacity: 0; }
 }
 
-.me-3 {
-  margin-right: 1rem;
+/* 传感器玻璃卡片 */
+.sensor-glass-card {
+  position: relative;
+  padding: 2rem;
+  border-radius: 2rem;
+  overflow: hidden;
+  color: white;
+  min-height: 220px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
 }
 
-.mb-2 {
-  margin-bottom: 0.5rem;
+.sensor-glass-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.15);
 }
 
-.mb-3 {
-  margin-bottom: 1rem;
+.sensor-glass-card.temperature { background: linear-gradient(135deg, #ff6b6b 0%, #f06595 100%); }
+.sensor-glass-card.humidity { background: linear-gradient(135deg, #37b24d 0%, #2f9e44 100%); }
+.sensor-glass-card.control { background: linear-gradient(135deg, #1c7ed6 0%, #1971c2 100%); }
+
+.card-overlay {
+  position: absolute;
+  top: -20%; right: -10%;
+  width: 200px; height: 200px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 50%;
 }
 
-.mb-4 {
-  margin-bottom: 1.5rem;
+.card-content { position: relative; z-index: 1; }
+
+.sensor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.mb-5 {
-  margin-bottom: 3rem;
+.sensor-label { font-size: 1.1rem; font-weight: 600; opacity: 0.9; }
+
+.sensor-icon-circle {
+  width: 44px; height: 44px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
 }
 
-.mt-3 {
-  margin-top: 1rem;
+.sensor-values { display: flex; align-items: center; justify-content: space-around; }
+
+.value-item { display: flex; flex-direction: column; align-items: center; }
+
+.value-item .number { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.value-item .unit { font-size: 1.1rem; font-weight: 600; opacity: 0.8; margin-bottom: 4px; }
+.value-item .sub-label { font-size: 0.75rem; opacity: 0.7; font-weight: 500; }
+
+.value-divider { width: 1px; height: 40px; background: rgba(255,255,255,0.2); }
+
+/* 控制项 */
+.control-items { margin-top: 10px; }
+.control-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(255,255,255,0.1);
+  padding: 0.75rem 1.25rem;
+  border-radius: 1rem;
 }
 
-.mt-5 {
-  margin-top: 3rem;
+.control-btn {
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  padding: 0.4rem 1.2rem;
+  border-radius: 100px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  min-width: 70px;
 }
 
-.my-5 {
-  margin-top: 3rem;
-  margin-bottom: 3rem;
+.control-btn.active { background: #ffc107; color: #000; box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4); }
+.control-btn:hover:not(:disabled) { transform: scale(1.05); }
+
+.status-pill {
+  padding: 0.25rem 0.75rem;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: rgba(255,255,255,0.2);
+}
+.status-pill.high { color: #ffc107; }
+
+/* 趋势图 */
+.section-title { font-weight: 700; color: #1a1a1a; margin-bottom: 0.5rem; }
+.section-line { width: 40px; height: 4px; background: #4facfe; border-radius: 2px; }
+
+.chart-box { border-radius: 1.5rem; }
+.chart-element { height: 350px; width: 100%; }
+
+/* 加载状态 */
+.loader-wave {
+  display: flex; justify-content: center; align-items: center; gap: 6px;
+}
+.loader-wave span {
+  width: 8px; height: 8px; background: #4facfe; border-radius: 50%;
+  animation: wave 1.2s infinite ease-in-out;
+}
+.loader-wave span:nth-child(2) { animation-delay: 0.1s; }
+.loader-wave span:nth-child(3) { animation-delay: 0.2s; }
+.loader-wave span:nth-child(4) { animation-delay: 0.3s; }
+
+@keyframes wave {
+  0%, 40%, 100% { transform: scaleY(0.4); }
+  20% { transform: scaleY(2.0); }
 }
 
-.py-5 {
-  padding-top: 3rem;
-  padding-bottom: 3rem;
+/* 空状态 */
+.empty-state-card { border: none; }
+.icon-circle {
+  width: 100px; height: 100px;
+  background: #f0f7ff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
 }
 
-.g-4 {
-  gap: 1.5rem;
+/* 错误通知 */
+.error-toast {
+  position: fixed; top: 2rem; right: 2rem;
+  background: #dc3545; color: white;
+  padding: 1rem 1.5rem; border-radius: 12px;
+  display: flex; align-items: center;
+  box-shadow: 0 10px 25px rgba(220, 53, 69, 0.3);
+  z-index: 9999;
+  animation: slideIn 0.3s ease-out;
 }
 
-.text-light {
-  color: #f8f9fa !important;
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
-.text-warning {
-  color: #ffc107 !important;
-}
-
-.text-success {
-  color: #28a745 !important;
-}
-
-.text-muted {
-  color: #6c757d !important;
-}
-
-.fw-bold {
-  font-weight: 700 !important;
-}
-
-.fs-5 {
-  font-size: 1.25rem !important;
-}
-
-.d-flex {
-  display: flex !important;
-}
-
-.justify-content-between {
-  justify-content: space-between !important;
-}
-
-.justify-content-center {
-  justify-content: center !important;
-}
-
-.align-items-center {
-  align-items: center !important;
-}
-
-.align-items-start {
-  align-items: flex-start !important;
-}
-
-.w-100 {
-  width: 100% !important;
-}
-
-.h-100 {
-  height: 100% !important;
-}
-
-.border-0 {
-  border: 0 !important;
-}
-
-.p-4 {
-  padding: 1.5rem !important;
-}
-
-.p-3 {
-  padding: 1rem !important;
-}
-
-@media (max-width: 768px) {
-  .real-time-data {
-    padding: 15px;
-  }
-  
-  .page-title {
-    font-size: 1.5rem;
-  }
-  
-  .d-flex {
-    flex-direction: column;
-  }
-  
-  .flex-md-row {
-    flex-direction: column !important;
-  }
-  
-  .me-3 {
-    margin-right: 0 !important;
-  }
-  
-  .mb-md-0 {
-    margin-bottom: 1rem !important;
-  }
-  
-  .form-select {
-    margin-bottom: 1rem;
-  }
-  
-  .status-indicator {
-    margin-top: 1rem;
-  }
-  
-  .sensor-icon-large {
-    display: none;
-  }
+@media (max-width: 991px) {
+  .header-panel { text-align: center; }
+  .status-badge { margin-top: 1rem; }
 }
 </style>

@@ -1,6 +1,8 @@
 """传感器数据相关的API路由"""
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -31,6 +33,70 @@ def get_latest_device_sensors(
 ):
     """获取设备的最新传感器数据（按类型分组，需要认证）"""
     sensors = sensor_service_module.get_latest_device_sensors(db, device_id)
+    return sensors
+
+
+@router.get("/device/{device_id}/history", response_model=List[SensorData])
+def get_device_sensor_history(
+    device_id: int,
+    sensor_type: Optional[str] = Query(
+        None,
+        description="传感器类型（如 Temperature1、Humidity1 等），为空则返回所有类型"
+    ),
+    start_time: Optional[str] = Query(
+        None,
+        description="开始时间（ISO 格式，例如 2026-01-14T00:00:00）"
+    ),
+    end_time: Optional[str] = Query(
+        None,
+        description="结束时间（ISO 格式），不传则默认为当前时间"
+    ),
+    time_range: Optional[str] = Query(
+        None,
+        description="时间范围：day / week / month，提供该参数时会自动计算时间范围"
+    ),
+    limit: Optional[int] = Query(
+        None,
+        description="最多返回的数据点数量"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    获取设备的历史传感器数据（按时间范围）
+
+    优先使用 time_range（day/week/month）自动计算时间范围；
+    如果未提供 time_range，则使用 start_time / end_time。
+    """
+    # 计算时间范围
+    if time_range:
+        now = datetime.utcnow()
+        if time_range == "day":
+            start_dt = now - timedelta(days=1)
+            end_dt = now
+        elif time_range == "week":
+            start_dt = now - timedelta(weeks=1)
+            end_dt = now
+        elif time_range == "month":
+            start_dt = now - timedelta(days=30)
+            end_dt = now
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid time_range. Use 'day', 'week', or 'month'."
+            )
+    else:
+        start_dt = datetime.fromisoformat(start_time) if start_time else None
+        end_dt = datetime.fromisoformat(end_time) if end_time else None
+
+    sensors = sensor_service_module.get_device_sensors_by_time_range(
+        db=db,
+        device_id=device_id,
+        sensor_type=sensor_type,
+        start_time=start_dt,
+        end_time=end_dt,
+        limit=limit,
+    )
     return sensors
 
 
