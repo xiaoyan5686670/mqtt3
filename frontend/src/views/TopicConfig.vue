@@ -18,7 +18,7 @@
                     <th>关联MQTT配置</th>
                     <th>订阅主题</th>
                     <th>发布主题</th>
-                    <th>数据格式</th>
+                    <th>解析配置</th>
                     <th>状态</th>
                     <th>操作</th>
                   </tr>
@@ -40,7 +40,12 @@
                       <span v-else class="text-muted">无</span>
                     </td>
                     <td>{{ config.publish_topic || '-' }}</td>
-                    <td>{{ config.data_format || 'JSON' }}</td>
+                    <td>
+                      <span v-if="config.json_parse_config" class="text-info" title="已配置JSON解析">
+                        <i class="fas fa-code"></i> 已配置
+                      </span>
+                      <span v-else class="text-muted">默认解析</span>
+                    </td>
                     <td>
                       <span :class="config.is_active ? 'text-success' : 'text-muted'">
                         {{ config.is_active ? '激活' : '未激活' }}
@@ -142,28 +147,39 @@
               </div>
               
               <div class="mb-3">
-                <label for="data_format" class="form-label">数据格式</label>
-                <select
-                  class="form-control"
-                  id="data_format"
-                  v-model="currentConfig.data_format"
-                >
-                  <option value="JSON">JSON</option>
-                  <option value="CSV">CSV</option>
-                  <option value="PLAIN">纯文本</option>
-                </select>
+                <label for="json_parse_config" class="form-label">JSON 解析配置 (可选)</label>
+                <div class="input-group mb-2">
+                  <textarea
+                    class="form-control"
+                    id="json_parse_config"
+                    rows="6"
+                    placeholder='例如：{"air_temperature_1": {"type": "Temperature1", "unit": "°C"}, "air_humidity_1": {"type": "Humidity1", "unit": "%"}}'
+                    v-model="currentConfig.json_parse_config"
+                  ></textarea>
+                </div>
+                <div class="form-text">
+                  <p class="mb-1">定义 JSON 数据的键如何映射到传感器类型和单位。</p>
+                  <button type="button" class="btn btn-sm btn-outline-info" @click="showHelper = !showHelper">
+                    {{ showHelper ? '隐藏工具' : '显示 JSON 配置助手' }}
+                  </button>
+                </div>
               </div>
-              
-              <div class="mb-3">
-                <label for="device_mapping" class="form-label">设备映射规则</label>
-                <textarea
-                  class="form-control"
-                  id="device_mapping"
-                  rows="4"
-                  placeholder='例如：{"device/+/temperature": {"type": "temperature", "unit": "°C"}}'
-                  v-model="currentConfig.device_mapping"
-                ></textarea>
-                <div class="form-text">定义如何将收到的主题数据映射到设备和传感器</div>
+
+              <!-- JSON 助手 -->
+              <div v-if="showHelper" class="card mb-3 bg-light">
+                <div class="card-body">
+                  <h6>JSON 解析配置助手</h6>
+                  <div class="mb-2">
+                    <label class="form-label small">粘贴示例数据：</label>
+                    <textarea class="form-control form-control-sm" rows="3" v-model="samplePayload" placeholder='{"temp": 25.5, "humi": 60}'></textarea>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-secondary" @click="generateMapping">生成映射建议</button>
+                  <div v-if="generatedMapping" class="mt-2">
+                    <p class="small text-muted mb-1">建议配置：</p>
+                    <pre class="bg-white p-2 small border rounded">{{ JSON.stringify(generatedMapping, null, 2) }}</pre>
+                    <button type="button" class="btn btn-sm btn-success" @click="applyMapping">应用建议</button>
+                  </div>
+                </div>
               </div>
               
               <div class="d-grid gap-2 d-md-flex justify-content-md-end">
@@ -191,11 +207,8 @@
             <h6>发布主题</h6>
             <p>用于向设备发送控制命令或配置信息。</p>
             
-            <h6>数据格式</h6>
-            <p>指定消息的格式，系统将按此格式解析数据。</p>
-            
-            <h6>设备映射规则</h6>
-            <p>定义如何将收到的消息与系统中的设备和传感器关联。</p>
+            <h6>JSON 解析配置</h6>
+            <p>当数据为 JSON 格式时，在此定义键名与传感器类型的映射关系。例如：<code>{"key": {"type": "Temperature1", "unit": "°C"}}</code></p>
           </div>
         </div>
       </div>
@@ -214,14 +227,16 @@ export default {
     const mqttConfigs = ref([])
     const showAddForm = ref(false)
     const editingConfig = ref(null)
+    const showHelper = ref(false)
+    const samplePayload = ref('')
+    const generatedMapping = ref(null)
     const currentConfig = ref({
       id: null,
       name: '',
       mqtt_config_id: null,
       subscribe_topics: '',
       publish_topic: '',
-      data_format: 'JSON',
-      device_mapping: ''
+      json_parse_config: ''
     })
 
     const loadConfigs = async () => {
@@ -231,6 +246,48 @@ export default {
       } catch (error) {
         console.error('加载主题配置失败:', error)
       }
+    }
+
+    const generateMapping = () => {
+      try {
+        const data = JSON.parse(samplePayload.value)
+        const mapping = {}
+        for (const key in data) {
+          if (typeof data[key] === 'number') {
+            let unit = ''
+            let name = ''
+            const keyLow = key.toLowerCase()
+            
+            // 自动识别单位和友好名称
+            if (keyLow.includes('temp')) {
+              unit = '°C'
+              const num = key.match(/\d+/) ? key.match(/\d+/)[0] : ''
+              name = num ? `温度${num}` : '温度'
+            } else if (keyLow.includes('hum')) {
+              unit = '%'
+              const num = key.match(/\d+/) ? key.match(/\d+/)[0] : ''
+              name = num ? `湿度${num}` : '湿度'
+            } else if (keyLow.includes('relay')) {
+              name = '继电器'
+            }
+            
+            // 生成配置：始终保持原始 key 为 type 以保证唯一性和可区分性
+            // 默认不设置 display_name，让用户在首页手动修改或在此手动指定
+            mapping[key] = { 
+              type: key, 
+              unit: unit 
+            }
+          }
+        }
+        generatedMapping.value = mapping
+      } catch (e) {
+        alert('无法解析示例数据，请确保是有效的 JSON 格式')
+      }
+    }
+
+    const applyMapping = () => {
+      currentConfig.value.json_parse_config = JSON.stringify(generatedMapping.value, null, 2)
+      showHelper.value = false
     }
 
     const loadMqttConfigs = async () => {
@@ -278,7 +335,8 @@ export default {
       
       currentConfig.value = { 
         ...config,
-        subscribe_topics: subscribe_topics
+        subscribe_topics: subscribe_topics,
+        json_parse_config: config.json_parse_config || ''
       }
       editingConfig.value = config.id
       showAddForm.value = true
@@ -339,10 +397,12 @@ export default {
         mqtt_config_id: null,
         subscribe_topics: '',
         publish_topic: '',
-        data_format: 'JSON',
-        device_mapping: ''
+        json_parse_config: ''
       }
       editingConfig.value = null
+      showHelper.value = false
+      samplePayload.value = ''
+      generatedMapping.value = null
     }
 
     onMounted(async () => {
@@ -357,6 +417,9 @@ export default {
       mqttConfigs,
       showAddForm,
       editingConfig,
+      showHelper,
+      samplePayload,
+      generatedMapping,
       currentConfig,
       saveConfig,
       editConfig,
@@ -364,7 +427,9 @@ export default {
       activateConfig,
       mqttConfigName,
       parseTopics,
-      resetForm
+      resetForm,
+      generateMapping,
+      applyMapping
     }
   }
 }

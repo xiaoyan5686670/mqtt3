@@ -7,6 +7,7 @@ class TopicConfigBase(BaseModel):
     name: str
     subscribe_topics: str
     publish_topic: Optional[str] = None
+    json_parse_config: Optional[str] = None
 
 
 class TopicConfigCreate(TopicConfigBase):
@@ -19,12 +20,14 @@ class TopicConfigUpdate(BaseModel):
     publish_topic: Optional[str] = None
     mqtt_config_id: Optional[int] = None
     is_active: Optional[bool] = None
+    json_parse_config: Optional[str] = None
 
 
 class TopicConfig(TopicConfigBase):
     id: int
     is_active: bool = False
     mqtt_config_id: Optional[int] = None
+    json_parse_config: Optional[str] = None
 
     class Config:
         from_attributes = True

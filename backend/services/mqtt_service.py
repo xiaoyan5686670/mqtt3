@@ -181,12 +181,42 @@ class MQTTService:
                     show_on_dashboard=True,  # 默认在首页展示
                     created_at=datetime.utcnow()  # 设置设备创建时间
                 )
+                
+                # 尝试为新设备自动匹配主题配置
+                from services import topic_config_service
+                matched_config = topic_config_service.find_topic_config_by_device_name(self.db, device_name)
+                if matched_config:
+                    device.topic_config_id = matched_config.id
+                    logger.info(f"自动为新设备匹配到主题配置: {matched_config.name}")
+                
                 self.db.add(device)
                 self.db.commit()
                 self.db.refresh(device)
             
+            # 获取解析配置
+            json_parse_config = None
+            if device.topic_config_id:
+                from models.topic_config import TopicConfigModel
+                config = self.db.query(TopicConfigModel).filter(TopicConfigModel.id == device.topic_config_id).first()
+                if config and config.json_parse_config:
+                    json_parse_config = config.json_parse_config
+            
+            # 如果设备没有关联配置，尝试根据当前主题直接查找配置
+            if not json_parse_config:
+                from models.topic_config import TopicConfigModel
+                active_configs = self.db.query(TopicConfigModel).filter(TopicConfigModel.is_active == True).all()
+                for config in active_configs:
+                    topics = self.parse_topics(config.subscribe_topics)
+                    if topic in topics and config.json_parse_config:
+                        json_parse_config = config.json_parse_config
+                        # 如果设备还没有关联配置，顺便关联一下
+                        if not device.topic_config_id:
+                            device.topic_config_id = config.id
+                            self.db.commit()
+                        break
+
             # 解析并保存传感器数据
-            self.parse_and_save_sensor_data(device.id, payload)
+            self.parse_and_save_sensor_data(device.id, payload, json_parse_config)
             self.db.commit()
             logger.debug(f"传感器数据已保存: 设备={device_name}")
         except Exception as e:
@@ -194,71 +224,138 @@ class MQTTService:
             if self.db:
                 self.db.rollback()
 
-    def parse_and_save_sensor_data(self, device_id: int, payload: str):
+    def parse_and_save_sensor_data(self, device_id: int, payload: str, json_parse_config: str = None):
         """解析并保存传感器数据"""
         # 首先检查是否是继电器控制消息（relayon/relayoff）
-        payload_lower = payload.strip().lower()
+        payload_stripped = payload.strip()
+        payload_lower = payload_stripped.lower()
+        
         if payload_lower == 'relayon':
-            # 收到开启命令，设置继电器状态为1
-            # 支持多种继电器类型名称：Relay Status、电源开关、开关等
-            self.save_sensor_data(device_id, 'Relay Status', 1, '')
+            self.save_sensor_data(device_id, 'Relay Status', 1, '', '继电器')
             logger.info(f"收到继电器开启命令，设备ID: {device_id}")
             return
         elif payload_lower == 'relayoff':
-            # 收到关闭命令，设置继电器状态为0
-            # 支持多种继电器类型名称：Relay Status、电源开关、开关等
-            self.save_sensor_data(device_id, 'Relay Status', 0, '')
+            self.save_sensor_data(device_id, 'Relay Status', 0, '', '继电器')
             logger.info(f"收到继电器关闭命令，设备ID: {device_id}")
             return
-        
-        # 匹配常见的传感器数据格式
+
+        # 尝试作为 JSON 解析
+        try:
+            data = json.loads(payload_stripped)
+            if isinstance(data, dict):
+                logger.debug(f"成功解析 JSON 数据: {data}")
+                
+                # 如果有自定义解析配置
+                if json_parse_config:
+                    try:
+                        parse_map = json.loads(json_parse_config)
+                        for key, config in parse_map.items():
+                            if key in data:
+                                # 核心改进：优先保持原始 key 作为 type，config 中的 type 作为 display_name 或 备用 type
+                                # 如果 config 中有 type，且不等于 key，我们把它视为 display_name
+                                raw_value = data[key]
+                                
+                                # 解析配置中的信息
+                                conf_type = config.get('type', key)
+                                unit = config.get('unit', '')
+                                display_name = config.get('display_name') or config.get('name')
+                                
+                                # 如果配置里的 type 和原始 key 不一样，且没有显式的 display_name，
+                                # 则把配置里的 type 当作 display_name
+                                if not display_name and conf_type != key:
+                                    display_name = conf_type
+                                
+                                # 始终以原始 key 作为数据库的 type，除非配置中明确要求覆盖（这里我们选择保留原始 key 为 type 以便区分）
+                                self.save_sensor_data(device_id, key, raw_value, unit, display_name)
+                        return # 使用 JSON 配置解析成功，直接返回
+                    except Exception as e:
+                        logger.error(f"使用自定义 JSON 配置解析失败: {e}")
+                
+                # 默认 JSON 解析逻辑（如果没有配置或解析失败）
+                for key, value in data.items():
+                    if isinstance(value, (int, float)):
+                        sensor_type = key
+                        unit = ''
+                        display_name = None
+                        
+                        key_lower = key.lower()
+                        if 'temp' in key_lower:
+                            unit = '°C'
+                            # 尝试生成一个友好的显示名称，例如 air_temperature_1 -> 温度 1
+                            num_match = re.search(r'\d+', key)
+                            num = num_match.group() if num_match else ""
+                            display_name = f"温度{num}" if num else "温度"
+                        elif 'hum' in key_lower:
+                            unit = '%'
+                            num_match = re.search(r'\d+', key)
+                            num = num_match.group() if num_match else ""
+                            display_name = f"湿度{num}" if num else "湿度"
+                        elif 'relay' in key_lower:
+                            display_name = "继电器"
+                        
+                        self.save_sensor_data(device_id, sensor_type, value, unit, display_name)
+                return
+        except json.JSONDecodeError:
+            pass # 不是 JSON 格式，继续使用正则解析
+
+        # 匹配常见的传感器数据格式（正则解析）
         patterns = [
-            (r'Temperature1:\s*([\d.]+)\s*C', 'Temperature1', '°C'),
-            (r'Humidity1:\s*([\d.]+)\s*%', 'Humidity1', '%'),
-            (r'Temperature2:\s*([\d.]+)\s*C', 'Temperature2', '°C'),
-            (r'Humidity2:\s*([\d.]+)\s*%', 'Humidity2', '%'),
-            (r'Relay Status:\s*(\d)', 'Relay Status', ''),
-            (r'PB8 Level:\s*(\d)', 'PB8 Level', ''),
+            (r'Temperature1:\s*([\d.]+)\s*C', 'Temperature1', '°C', '温度1'),
+            (r'Humidity1:\s*([\d.]+)\s*%', 'Humidity1', '%', '湿度1'),
+            (r'Temperature2:\s*([\d.]+)\s*C', 'Temperature2', '°C', '温度2'),
+            (r'Humidity2:\s*([\d.]+)\s*%', 'Humidity2', '%', '湿度2'),
+            (r'Relay Status:\s*(\d)', 'Relay Status', '', '继电器'),
+            (r'PB8 Level:\s*(\d)', 'PB8 Level', '', 'PB8电平'),
         ]
         
-        for pattern, sensor_type, unit in patterns:
+        for pattern, sensor_type, unit, display_name in patterns:
             match = re.search(pattern, payload)
             if match:
                 try:
                     value = float(match.group(1)) if unit != '' else int(match.group(1))
-                    self.save_sensor_data(device_id, sensor_type, value, unit)
+                    self.save_sensor_data(device_id, sensor_type, value, unit, display_name)
                 except ValueError as e:
                     logger.warning(f"转换数值失败: {match.group(1)}, 错误: {e}")
 
-    def save_sensor_data(self, device_id: int, sensor_type: str, value: float, unit: str):
+    def save_sensor_data(self, device_id: int, sensor_type: str, value: float, unit: str, display_name: str = None):
         """保存传感器数据到数据库（每次创建新记录，保留历史数据）"""
-        # 确定默认的最小值和最大值
+        # 确定默认的最小值和最大值（改进为不区分大小写，且支持包含关系）
         min_value = 0.0
         max_value = 100.0
-        if 'Temperature' in sensor_type:
+        
+        type_lower = sensor_type.lower()
+        
+        if 'temp' in type_lower:
             min_value = -40.0
             max_value = 80.0
-        elif 'Humidity' in sensor_type:
+        elif 'hum' in type_lower:
             min_value = 0.0
             max_value = 100.0
         
         # 确定告警状态
         alert_status = 'normal'
-        if 'Temperature' in sensor_type and float(value) > 28:
-            alert_status = 'alert' if float(value) > 30 else 'warning'
-        elif 'Humidity' in sensor_type and float(value) > 65:
-            alert_status = 'alert' if float(value) > 70 else 'warning'
+        try:
+            val_float = float(value)
+            if 'temp' in type_lower:
+                if val_float > 30: alert_status = 'alert'
+                elif val_float > 28: alert_status = 'warning'
+            elif 'hum' in type_lower:
+                if val_float > 70: alert_status = 'alert'
+                elif val_float > 65: alert_status = 'warning'
+        except:
+            pass
         
-        # 每次都创建新记录，保留历史数据（用于历史曲线查看）
+        # 每次都创建新记录，保留历史数据
         sensor_data = SensorDataModel(
             device_id=device_id,
-            type=sensor_type,
+            type=sensor_type, # 保持原始 key
             value=value,
             unit=unit,
             timestamp=datetime.utcnow(),
             min_value=min_value,
             max_value=max_value,
-            alert_status=alert_status
+            alert_status=alert_status,
+            display_name=display_name # 保存显示名称
         )
         self.db.add(sensor_data)
 

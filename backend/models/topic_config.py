@@ -13,3 +13,4 @@ class TopicConfigModel(Base):
     publish_topic = Column(String, nullable=True)
     is_active = Column(Boolean, default=False, nullable=False)
     mqtt_config_id = Column(Integer, nullable=True)
+    json_parse_config = Column(String, nullable=True)  # JSON格式的解析配置
