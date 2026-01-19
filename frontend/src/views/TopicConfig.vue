@@ -165,6 +165,56 @@
                 </div>
               </div>
 
+              <!-- 继电器控制消息格式配置 -->
+              <div class="card mb-3 bg-light">
+                <div class="card-body">
+                  <h6 class="card-title">
+                    <i class="fas fa-toggle-on me-2"></i>继电器控制消息格式配置
+                  </h6>
+                  <p class="text-muted small mb-3">配置继电器开关的消息格式，支持字符串或JSON格式</p>
+                  
+                  <div class="row">
+                    <div class="col-md-6 mb-3">
+                      <label for="relay_on_payload" class="form-label">继电器开启消息</label>
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="relay_on_payload"
+                        placeholder='例如：relayon 或 {"relay":"on"}'
+                        v-model="currentConfig.relay_on_payload"
+                      />
+                      <div class="form-text">
+                        留空则默认使用 "relayon"
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                      <label for="relay_off_payload" class="form-label">继电器关闭消息</label>
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="relay_off_payload"
+                        placeholder='例如：relayoff 或 {"relay":"off"}'
+                        v-model="currentConfig.relay_off_payload"
+                      />
+                      <div class="form-text">
+                        留空则默认使用 "relayoff"
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="alert alert-info mb-0 small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>提示：</strong>
+                    <ul class="mb-0 mt-1">
+                      <li>字符串格式示例：<code>relayon</code> 或 <code>1</code></li>
+                      <li>JSON格式示例：<code>{"relay":"on"}</code> 或 <code>{"cmd":"relay","value":1}</code></li>
+                      <li>系统会自动检测格式并正确发送</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
               <!-- JSON 助手 -->
               <div v-if="showHelper" class="card mb-3 bg-light">
                 <div class="card-body">
@@ -236,7 +286,9 @@ export default {
       mqtt_config_id: null,
       subscribe_topics: '',
       publish_topic: '',
-      json_parse_config: ''
+      json_parse_config: '',
+      relay_on_payload: '',
+      relay_off_payload: ''
     })
 
     const loadConfigs = async () => {
@@ -348,7 +400,9 @@ export default {
       currentConfig.value = { 
         ...config,
         subscribe_topics: subscribe_topics,
-        json_parse_config: config.json_parse_config || ''
+        json_parse_config: config.json_parse_config || '',
+        relay_on_payload: config.relay_on_payload || '',
+        relay_off_payload: config.relay_off_payload || ''
       }
       editingConfig.value = config.id
       showAddForm.value = true
@@ -409,7 +463,9 @@ export default {
         mqtt_config_id: null,
         subscribe_topics: '',
         publish_topic: '',
-        json_parse_config: ''
+        json_parse_config: '',
+        relay_on_payload: '',
+        relay_off_payload: ''
       }
       editingConfig.value = null
       showHelper.value = false

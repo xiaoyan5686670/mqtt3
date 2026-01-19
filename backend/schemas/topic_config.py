@@ -8,6 +8,8 @@ class TopicConfigBase(BaseModel):
     subscribe_topics: str
     publish_topic: Optional[str] = None
     json_parse_config: Optional[str] = None
+    relay_on_payload: Optional[str] = None
+    relay_off_payload: Optional[str] = None
 
 
 class TopicConfigCreate(TopicConfigBase):
@@ -21,6 +23,8 @@ class TopicConfigUpdate(BaseModel):
     mqtt_config_id: Optional[int] = None
     is_active: Optional[bool] = None
     json_parse_config: Optional[str] = None
+    relay_on_payload: Optional[str] = None
+    relay_off_payload: Optional[str] = None
 
 
 class TopicConfig(TopicConfigBase):
@@ -28,6 +32,8 @@ class TopicConfig(TopicConfigBase):
     is_active: bool = False
     mqtt_config_id: Optional[int] = None
     json_parse_config: Optional[str] = None
+    relay_on_payload: Optional[str] = None
+    relay_off_payload: Optional[str] = None
 
     class Config:
         from_attributes = True

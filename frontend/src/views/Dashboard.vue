@@ -393,6 +393,7 @@ export default {
     const sendingRelayId = ref(null)
     const relayToggleLock = ref(new Set())
     const relayExpectedStates = ref(new Map())
+    const topicConfig = ref(null)
     let refreshInterval = null
 
     // 判断是否为继电器/开关类型（需要在 fetchDevicesWithSensors 之前定义）
@@ -400,6 +401,21 @@ export default {
       if (!type) return false
       const t = type.toLowerCase()
       return t.includes('relay') || t.includes('开关') || t.includes('switch')
+    }
+
+    // 获取激活的主题配置
+    const fetchTopicConfig = async () => {
+      try {
+        const response = await axios.get('/api/topic-configs')
+        const configs = response.data || []
+        // 查找激活的配置
+        const activeConfig = configs.find(c => c.is_active)
+        if (activeConfig) {
+          topicConfig.value = activeConfig
+        }
+      } catch (error) {
+        console.error('获取主题配置失败:', error)
+      }
     }
 
     // 从EMQX获取客户端连接状态
@@ -589,7 +605,21 @@ export default {
       sendingRelayId.value = key; relayToggleLock.value.add(key)
       try {
         const topic = device.publish_topic || `pc/${device.id}`
-        const msg = sensor.value > 0 ? 'relayoff' : 'relayon'
+        
+        // 根据配置决定消息格式
+        let msg
+        if (sensor.value > 0) {
+          // 关闭继电器
+          msg = (topicConfig.value && topicConfig.value.relay_off_payload) 
+            ? topicConfig.value.relay_off_payload 
+            : 'relayoff'
+        } else {
+          // 开启继电器
+          msg = (topicConfig.value && topicConfig.value.relay_on_payload) 
+            ? topicConfig.value.relay_on_payload 
+            : 'relayon'
+        }
+        
         const res = await axios.post('/api/mqtt-publish/publish', { topic, message: msg })
         if (res.data.success) {
           const val = sensor.value > 0 ? 0 : 1
@@ -621,6 +651,7 @@ export default {
     const formatShortDate = (d) => d ? new Date(d).toLocaleDateString('zh-CN') : ''
 
     onMounted(async () => {
+      await fetchTopicConfig()
       await fetchDevicesWithSensors()
       refreshInterval = setInterval(fetchDevicesWithSensors, 5000)
     })
