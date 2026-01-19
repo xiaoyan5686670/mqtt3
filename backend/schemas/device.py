@@ -12,6 +12,8 @@ class DeviceBase(BaseModel):
     remark: Optional[str] = None  # 备注字段
     show_on_dashboard: Optional[bool] = True  # 是否在首页展示
     clientid: Optional[str] = None  # EMQX 客户端 ID
+    relay_on_payload: Optional[str] = None  # 继电器开启的payload格式
+    relay_off_payload: Optional[str] = None  # 继电器关闭的payload格式
 
 
 class DeviceCreate(DeviceBase):
@@ -28,6 +30,8 @@ class DeviceUpdate(BaseModel):
     remark: Optional[str] = None  # 备注字段
     show_on_dashboard: Optional[bool] = None  # 是否在首页展示
     clientid: Optional[str] = None  # EMQX 客户端 ID
+    relay_on_payload: Optional[str] = None  # 继电器开启的payload格式
+    relay_off_payload: Optional[str] = None  # 继电器关闭的payload格式
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
 
@@ -39,6 +43,8 @@ class Device(DeviceBase):
     remark: Optional[str] = None  # 备注字段
     show_on_dashboard: bool = True  # 是否在首页展示
     clientid: Optional[str] = None  # EMQX 客户端 ID
+    relay_on_payload: Optional[str] = None  # 继电器开启的payload格式
+    relay_off_payload: Optional[str] = None  # 继电器关闭的payload格式
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
     publish_topic: Optional[str] = None  # 发布主题（计算属性）

@@ -20,6 +20,8 @@ class DeviceModel(Base):
     clientid = Column(String, nullable=True)  # EMQX 客户端 ID，用于准确判断设备在线状态
     mqtt_config_id = Column(Integer, nullable=True)
     topic_config_id = Column(Integer, nullable=True)
+    relay_on_payload = Column(String, nullable=True)  # 继电器开启的payload格式（设备级别）
+    relay_off_payload = Column(String, nullable=True)  # 继电器关闭的payload格式（设备级别）
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)  # 设备创建时间
     
     # 关系

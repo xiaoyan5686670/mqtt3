@@ -393,7 +393,7 @@ export default {
     const sendingRelayId = ref(null)
     const relayToggleLock = ref(new Set())
     const relayExpectedStates = ref(new Map())
-    const topicConfig = ref(null)
+    const allTopicConfigs = ref([])
     let refreshInterval = null
 
     // 判断是否为继电器/开关类型（需要在 fetchDevicesWithSensors 之前定义）
@@ -403,19 +403,20 @@ export default {
       return t.includes('relay') || t.includes('开关') || t.includes('switch')
     }
 
-    // 获取激活的主题配置
-    const fetchTopicConfig = async () => {
+    // 获取所有主题配置
+    const fetchAllTopicConfigs = async () => {
       try {
         const response = await axios.get('/api/topic-configs')
-        const configs = response.data || []
-        // 查找激活的配置
-        const activeConfig = configs.find(c => c.is_active)
-        if (activeConfig) {
-          topicConfig.value = activeConfig
-        }
+        allTopicConfigs.value = response.data || []
       } catch (error) {
         console.error('获取主题配置失败:', error)
       }
+    }
+    
+    // 根据设备的 topic_config_id 获取对应的主题配置
+    const getDeviceTopicConfig = (device) => {
+      if (!device.topic_config_id) return null
+      return allTopicConfigs.value.find(c => c.id === device.topic_config_id)
     }
 
     // 从EMQX获取客户端连接状态
@@ -606,18 +607,29 @@ export default {
       try {
         const topic = device.publish_topic || `pc/${device.id}`
         
-        // 根据配置决定消息格式
+        // 获取设备关联的主题配置
+        const deviceTopicConfig = getDeviceTopicConfig(device)
+        
+        // 根据配置决定消息格式（优先级：设备配置 > 设备关联的主题配置 > 默认值）
         let msg
         if (sensor.value > 0) {
-          // 关闭继电器
-          msg = (topicConfig.value && topicConfig.value.relay_off_payload) 
-            ? topicConfig.value.relay_off_payload 
-            : 'relayoff'
+          // 关闭继电器 - 按优先级查找配置
+          if (device.relay_off_payload) {
+            msg = device.relay_off_payload  // 设备级别配置（最高优先级）
+          } else if (deviceTopicConfig && deviceTopicConfig.relay_off_payload) {
+            msg = deviceTopicConfig.relay_off_payload  // 设备关联的主题配置
+          } else {
+            msg = 'relayoff'  // 默认值
+          }
         } else {
-          // 开启继电器
-          msg = (topicConfig.value && topicConfig.value.relay_on_payload) 
-            ? topicConfig.value.relay_on_payload 
-            : 'relayon'
+          // 开启继电器 - 按优先级查找配置
+          if (device.relay_on_payload) {
+            msg = device.relay_on_payload  // 设备级别配置（最高优先级）
+          } else if (deviceTopicConfig && deviceTopicConfig.relay_on_payload) {
+            msg = deviceTopicConfig.relay_on_payload  // 设备关联的主题配置
+          } else {
+            msg = 'relayon'  // 默认值
+          }
         }
         
         const res = await axios.post('/api/mqtt-publish/publish', { topic, message: msg })
@@ -651,7 +663,7 @@ export default {
     const formatShortDate = (d) => d ? new Date(d).toLocaleDateString('zh-CN') : ''
 
     onMounted(async () => {
-      await fetchTopicConfig()
+      await fetchAllTopicConfigs()
       await fetchDevicesWithSensors()
       refreshInterval = setInterval(fetchDevicesWithSensors, 5000)
     })

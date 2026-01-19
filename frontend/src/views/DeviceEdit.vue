@@ -118,6 +118,57 @@
             </select>
             <div class="form-text">选择用于此设备数据订阅/发布的主题配置</div>
           </div>
+
+          <!-- 继电器控制消息格式配置 -->
+          <div class="card mb-3 bg-light">
+            <div class="card-body">
+              <h6 class="card-title">
+                <i class="fas fa-toggle-on me-2"></i>继电器控制消息格式配置（可选）
+              </h6>
+              <p class="text-muted small mb-3">为此设备单独配置继电器开关的消息格式。如果不配置，将使用主题配置中的默认格式。</p>
+              
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label for="relayOnPayload" class="form-label">继电器开启消息</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="relayOnPayload"
+                    placeholder='例如：relayon 或 {"relay":"on"}'
+                    v-model="deviceForm.relay_on_payload"
+                  />
+                  <div class="form-text">
+                    留空则使用主题配置或默认值 "relayon"
+                  </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                  <label for="relayOffPayload" class="form-label">继电器关闭消息</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="relayOffPayload"
+                    placeholder='例如：relayoff 或 {"relay":"off"}'
+                    v-model="deviceForm.relay_off_payload"
+                  />
+                  <div class="form-text">
+                    留空则使用主题配置或默认值 "relayoff"
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert alert-info mb-0 small">
+                <i class="fas fa-info-circle me-1"></i>
+                <strong>提示：</strong>
+                <ul class="mb-0 mt-1">
+                  <li>优先级：设备配置 &gt; 主题配置 &gt; 系统默认值</li>
+                  <li>字符串格式示例：<code>relayon</code>、<code>1</code>、<code>ON</code></li>
+                  <li>JSON格式示例：<code>{"relay":"on"}</code>、<code>{"cmd":"relay","value":1}</code></li>
+                  <li>如果此设备的下位机使用特殊格式，在此配置；否则留空使用通用配置</li>
+                </ul>
+              </div>
+            </div>
+          </div>
           
           <div class="d-grid gap-2 d-md-flex justify-content-md-end">
             <router-link to="/devices" class="btn btn-secondary me-2">取消</router-link>
@@ -153,7 +204,9 @@ export default {
       remark: '',  // 备注字段
       show_on_dashboard: true,  // 是否在首页展示，默认true
       mqtt_config_id: null,
-      topic_config_id: null
+      topic_config_id: null,
+      relay_on_payload: '',  // 继电器开启payload
+      relay_off_payload: ''  // 继电器关闭payload
     })
 
     // 加载MQTT配置列表
@@ -191,7 +244,9 @@ export default {
           remark: device.remark || '',  // 备注字段
           show_on_dashboard: device.show_on_dashboard !== undefined ? device.show_on_dashboard : true,  // 是否在首页展示
           mqtt_config_id: device.mqtt_config_id || null,
-          topic_config_id: device.topic_config_id || null
+          topic_config_id: device.topic_config_id || null,
+          relay_on_payload: device.relay_on_payload || '',  // 继电器开启payload
+          relay_off_payload: device.relay_off_payload || ''  // 继电器关闭payload
         }
       } catch (error) {
         console.error('加载设备详情失败:', error)
