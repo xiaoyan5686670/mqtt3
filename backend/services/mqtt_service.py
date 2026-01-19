@@ -465,7 +465,7 @@ class MQTTService:
                 api_url,
                 auth=(api_key, api_secret),
                 timeout=10,
-                params={'limit': 10000}  # 获取更多客户端
+                params={'limit': 1000}  # EMQX API 限制最大 1000
             )
             
             if response.status_code == 200:

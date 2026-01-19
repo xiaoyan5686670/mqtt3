@@ -486,8 +486,18 @@ export default {
               }
             })
             
-            // 判断设备在线状态：检查EMQX客户端ID是否在线
-            const isOnline = onlineClientIds.has(device.id) || onlineClientIds.has(device.name)
+            // 判断设备在线状态：优先使用 clientid，其次使用 name，最后使用 id
+            let isOnline = false
+            if (device.clientid) {
+              // 如果设备有明确的 clientid，使用它来判断
+              isOnline = onlineClientIds.has(device.clientid)
+            } else if (device.name) {
+              // 否则尝试使用 name
+              isOnline = onlineClientIds.has(device.name)
+            } else {
+              // 最后尝试使用 id（转换为字符串）
+              isOnline = onlineClientIds.has(String(device.id))
+            }
             
             return { device, sensors: Array.from(sensorTypeMap.values()), isOnline }
           })

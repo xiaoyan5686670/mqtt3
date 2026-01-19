@@ -51,6 +51,18 @@
           </div>
           
           <div class="mb-3">
+            <label for="clientId" class="form-label">客户端 ID (Client ID)</label>
+            <input
+              type="text"
+              class="form-control"
+              id="clientId"
+              v-model="deviceForm.clientid"
+              placeholder="EMQX 客户端 ID，用于判断设备在线状态"
+            />
+            <div class="form-text">设备在 EMQX 中的客户端 ID，用于准确判断设备在线状态。如果不填写，默认使用设备名称。</div>
+          </div>
+          
+          <div class="mb-3">
             <label for="deviceRemark" class="form-label">备注</label>
             <textarea
               class="form-control"
@@ -137,6 +149,7 @@ export default {
       name: '',
       device_type: '',  // 改为与后端API匹配的字段名
       location: '',
+      clientid: '',  // EMQX 客户端 ID
       remark: '',  // 备注字段
       show_on_dashboard: true,  // 是否在首页展示，默认true
       mqtt_config_id: null,
@@ -174,6 +187,7 @@ export default {
           name: device.name,
           device_type: device.device_type,  // 映射到正确的字段
           location: device.location,
+          clientid: device.clientid || '',  // EMQX 客户端 ID
           remark: device.remark || '',  // 备注字段
           show_on_dashboard: device.show_on_dashboard !== undefined ? device.show_on_dashboard : true,  // 是否在首页展示
           mqtt_config_id: device.mqtt_config_id || null,

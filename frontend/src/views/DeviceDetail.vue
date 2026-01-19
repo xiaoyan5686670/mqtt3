@@ -36,6 +36,10 @@
                   <td>{{ device.name }}</td>
                 </tr>
                 <tr>
+                  <th>客户端 ID</th>
+                  <td><code class="text-muted">{{ device.clientid || device.name }}</code></td>
+                </tr>
+                <tr>
                   <th>类型</th>
                   <td>{{ device.device_type || device.type || '未知' }}</td>
                 </tr>

@@ -13,6 +13,7 @@
               <tr>
                 <th>ID</th>
                 <th>名称</th>
+                <th>客户端ID</th>
                 <th>类型</th>
                 <th>位置</th>
                 <th>备注</th>
@@ -25,6 +26,9 @@
               <tr v-for="device in devices" :key="device.id">
                 <td>{{ device.id }}</td>
                 <td>{{ device.name }}</td>
+                <td>
+                  <code class="text-muted small">{{ device.clientid || device.name }}</code>
+                </td>
                 <td>{{ device.device_type || device.type || '未知' }}</td>
                 <td>{{ device.location || '未知' }}</td>
                 <td>{{ device.remark || '无' }}</td>

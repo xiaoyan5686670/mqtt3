@@ -11,6 +11,7 @@ class DeviceBase(BaseModel):
     location: Optional[str] = None
     remark: Optional[str] = None  # 备注字段
     show_on_dashboard: Optional[bool] = True  # 是否在首页展示
+    clientid: Optional[str] = None  # EMQX 客户端 ID
 
 
 class DeviceCreate(DeviceBase):
@@ -26,6 +27,7 @@ class DeviceUpdate(BaseModel):
     location: Optional[str] = None
     remark: Optional[str] = None  # 备注字段
     show_on_dashboard: Optional[bool] = None  # 是否在首页展示
+    clientid: Optional[str] = None  # EMQX 客户端 ID
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
 
@@ -36,6 +38,7 @@ class Device(DeviceBase):
     display_name: Optional[str] = None  # 展示名称，用于首页显示
     remark: Optional[str] = None  # 备注字段
     show_on_dashboard: bool = True  # 是否在首页展示
+    clientid: Optional[str] = None  # EMQX 客户端 ID
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
     publish_topic: Optional[str] = None  # 发布主题（计算属性）

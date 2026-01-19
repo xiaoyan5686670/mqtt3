@@ -17,6 +17,7 @@ class DeviceModel(Base):
     location = Column(String, nullable=True)
     remark = Column(String, nullable=True)  # 备注字段，用于记录设备相关信息
     show_on_dashboard = Column(Boolean, default=True, nullable=False)  # 是否在首页展示
+    clientid = Column(String, nullable=True)  # EMQX 客户端 ID，用于准确判断设备在线状态
     mqtt_config_id = Column(Integer, nullable=True)
     topic_config_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)  # 设备创建时间
