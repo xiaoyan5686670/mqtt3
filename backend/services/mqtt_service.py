@@ -254,6 +254,11 @@ class MQTTService:
                         parse_map = json.loads(json_parse_config)
                         for key, config in parse_map.items():
                             if key in data:
+                                # 确保 config 是字典类型，如果不是，创建一个默认配置
+                                if not isinstance(config, dict):
+                                    logger.warning(f"JSON 配置格式错误: {key} 的配置不是字典类型，使用默认配置")
+                                    config = {'type': key, 'unit': ''}
+                                
                                 # 核心改进：优先保持原始 key 作为 type，config 中的 type 作为 display_name 或 备用 type
                                 # 如果 config 中有 type，且不等于 key，我们把它视为 display_name
                                 raw_value = data[key]
@@ -268,11 +273,43 @@ class MQTTService:
                                 if not display_name and conf_type != key:
                                     display_name = conf_type
                                 
+                                # 处理值的类型转换
+                                processed_value = raw_value
+                                key_lower = key.lower()
+                                
+                                # 如果是字符串类型的继电器/开关状态，转换为数字
+                                if isinstance(raw_value, str):
+                                    value_lower = raw_value.lower().strip()
+                                    if key_lower in ['relay_status', 'relay', 'switch', 'switch_status'] or \
+                                       'relay' in key_lower or 'switch' in key_lower:
+                                        # 转换常见的开关状态字符串为数字
+                                        if value_lower in ['on', 'open', 'true', '1', 'active', 'enabled']:
+                                            processed_value = 1
+                                        elif value_lower in ['off', 'close', 'false', '0', 'inactive', 'disabled']:
+                                            processed_value = 0
+                                        else:
+                                            # 尝试直接转换为数字
+                                            try:
+                                                processed_value = float(raw_value)
+                                            except ValueError:
+                                                logger.warning(f"无法转换继电器状态值: {raw_value}，跳过该字段")
+                                                continue
+                                elif not isinstance(raw_value, (int, float)):
+                                    # 如果不是数字也不是字符串，尝试转换为浮点数
+                                    try:
+                                        processed_value = float(raw_value)
+                                    except (ValueError, TypeError):
+                                        logger.warning(f"无法转换值类型: {raw_value} ({type(raw_value)}), 跳过字段 {key}")
+                                        continue
+                                
                                 # 始终以原始 key 作为数据库的 type，除非配置中明确要求覆盖（这里我们选择保留原始 key 为 type 以便区分）
-                                self.save_sensor_data(device_id, key, raw_value, unit, display_name)
+                                self.save_sensor_data(device_id, key, processed_value, unit, display_name)
                         return # 使用 JSON 配置解析成功，直接返回
                     except Exception as e:
                         logger.error(f"使用自定义 JSON 配置解析失败: {e}")
+                        # 记录详细的调试信息
+                        logger.error(f"JSON 配置内容: {json_parse_config}")
+                        logger.error(f"接收到的数据: {data}")
                 
                 # 默认 JSON 解析逻辑（如果没有配置或解析失败）
                 for key, value in data.items():

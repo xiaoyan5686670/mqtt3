@@ -253,10 +253,13 @@ export default {
         const data = JSON.parse(samplePayload.value)
         const mapping = {}
         for (const key in data) {
-          if (typeof data[key] === 'number') {
+          const value = data[key]
+          const keyLow = key.toLowerCase()
+          
+          // 处理数字类型
+          if (typeof value === 'number') {
             let unit = ''
             let name = ''
-            const keyLow = key.toLowerCase()
             
             // 自动识别单位和友好名称
             if (keyLow.includes('temp')) {
@@ -276,6 +279,15 @@ export default {
             mapping[key] = { 
               type: key, 
               unit: unit 
+            }
+          }
+          // 处理字符串类型的继电器/开关状态
+          else if (typeof value === 'string' && 
+                   (keyLow.includes('relay') || keyLow.includes('switch') || 
+                    keyLow.includes('status') || keyLow.includes('开关'))) {
+            mapping[key] = { 
+              type: key, 
+              unit: '' 
             }
           }
         }
