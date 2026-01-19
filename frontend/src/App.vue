@@ -21,6 +21,9 @@
               <router-link class="nav-link" to="/mqtt-config">MQTT配置管理</router-link>
             </li>
             <li class="nav-item" v-if="authStore.isAdmin">
+              <router-link class="nav-link" to="/emqx-api-config">EMQX API配置</router-link>
+            </li>
+            <li class="nav-item" v-if="authStore.isAdmin">
               <router-link class="nav-link" to="/topic-config">消费&生产主题配置</router-link>
             </li>
             <li class="nav-item" v-if="authStore.isAdmin">

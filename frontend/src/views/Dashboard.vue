@@ -13,6 +13,45 @@
       </div>
     </div>
     
+    <!-- 统计卡片区域 -->
+    <div class="stats-container mb-4">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="stat-card stat-card-total">
+            <div class="stat-icon">
+              <i class="fas fa-server"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ devices.length }}</div>
+              <div class="stat-label">总设备数</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card stat-card-online">
+            <div class="stat-icon">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ onlineDevices }}</div>
+              <div class="stat-label">在线设备</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card stat-card-offline">
+            <div class="stat-icon">
+              <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ offlineDevices }}</div>
+              <div class="stat-label">离线设备</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 搜索框 -->
     <div class="search-container mb-4">
       <div class="search-box">
@@ -84,6 +123,14 @@
                 <div class="d-flex justify-content-between align-items-start">
                   <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
+                      <!-- 在线状态指示器 -->
+                      <span 
+                        class="status-indicator me-2" 
+                        :class="deviceData.isOnline ? 'status-online' : 'status-offline'"
+                        :title="deviceData.isOnline ? '在线' : '离线'"
+                      >
+                        <i class="fas fa-circle"></i>
+                      </span>
                       <h6 class="mb-0 me-2 device-name">
                         <i class="fas fa-microchip me-1"></i>
                         <span v-if="editingDeviceId !== deviceData.device.id" class="device-name-wrapper">
@@ -355,6 +402,28 @@ export default {
       return t.includes('relay') || t.includes('开关') || t.includes('switch')
     }
 
+    // 从EMQX获取客户端连接状态
+    const fetchClientStatus = async () => {
+      try {
+        const response = await axios.get('/api/mqtt-publish/clients')
+        const clientsData = response.data
+        const onlineClientIds = new Set()
+        
+        if (clientsData && clientsData.data) {
+          clientsData.data.forEach(client => {
+            if (client.connected) {
+              onlineClientIds.add(client.clientid)
+            }
+          })
+        }
+        
+        return onlineClientIds
+      } catch (error) {
+        console.error('获取客户端状态失败:', error)
+        return new Set()
+      }
+    }
+
     const fetchDevices = async () => {
       try {
         isLoading.value = true
@@ -366,6 +435,10 @@ export default {
     const fetchDevicesWithSensors = async () => {
       try {
         await fetchDevices()
+        
+        // 获取EMQX客户端连接状态
+        const onlineClientIds = await fetchClientStatus()
+        
         const sensorsResponse = await axios.get('/api/sensors/latest')
         const allSensors = sensorsResponse.data || []
         const sensorMap = new Map()
@@ -373,13 +446,34 @@ export default {
           if (!sensorMap.has(s.device_id)) sensorMap.set(s.device_id, [])
           sensorMap.get(s.device_id).push(s)
         })
+        
+        // 保存旧的传感器数据，以便保留 display_name
+        const oldDevicesMap = new Map()
+        devicesWithSensors.value.forEach(d => {
+          const sensorMap = new Map()
+          d.sensors.forEach(s => {
+            sensorMap.set(s.type, s)
+          })
+          oldDevicesMap.set(d.device.id, sensorMap)
+        })
+        
         devicesWithSensors.value = devices.value
           .filter(d => d.show_on_dashboard !== false)
           .map(device => {
             const sensors = sensorMap.get(device.id) || []
             const sensorTypeMap = new Map()
+            const oldSensors = oldDevicesMap.get(device.id)
+            
             sensors.forEach(sensor => {
               if (!sensorTypeMap.has(sensor.type) || new Date(sensor.timestamp) > new Date(sensorTypeMap.get(sensor.type).timestamp)) {
+                // 保留旧的 display_name（如果存在）
+                if (oldSensors && oldSensors.has(sensor.type)) {
+                  const oldSensor = oldSensors.get(sensor.type)
+                  if (oldSensor.display_name !== undefined) {
+                    sensor.display_name = oldSensor.display_name
+                  }
+                }
+                
                 if (isRelayType(sensor.type)) {
                   const key = `${device.id}-${sensor.type}`
                   const exp = relayExpectedStates.value.get(key)
@@ -391,7 +485,11 @@ export default {
                 sensorTypeMap.set(sensor.type, sensor)
               }
             })
-            return { device, sensors: Array.from(sensorTypeMap.values()), isOnline: device.status === '在线' }
+            
+            // 判断设备在线状态：检查EMQX客户端ID是否在线
+            const isOnline = onlineClientIds.has(device.id) || onlineClientIds.has(device.name)
+            
+            return { device, sensors: Array.from(sensorTypeMap.values()), isOnline }
           })
         handleSearch()
       } catch (e) { console.error(e) }
@@ -521,8 +619,8 @@ export default {
     return {
       devices, devicesWithSensors, filteredDevices, isLoading, searchKeyword, authStore,
       editingSensorId, editingSensorName, editingDeviceId, editingDeviceName, sendingRelayId,
-      onlineDevices: computed(() => devices.value.filter(d => d.status === '在线').length),
-      offlineDevices: computed(() => devices.value.filter(d => d.status !== '在线').length),
+      onlineDevices: computed(() => devicesWithSensors.value.filter(d => d.isOnline).length),
+      offlineDevices: computed(() => devicesWithSensors.value.filter(d => !d.isOnline).length),
       formatSensorValue, getDeviceDisplayName, getSensorDisplayName, getSensorPercentage,
       getSensorStatusClass, formatShortDate, getPrioritySensors, getOtherSensors, hasPrioritySensors,
       handleSearch, clearSearch, startEditDevice, saveDeviceName, cancelEditDevice,
@@ -533,6 +631,87 @@ export default {
 </script>
 
 <style scoped>
+/* 统计卡片样式 */
+.stats-container { margin: 0 -15px 30px -15px; padding: 0 15px; }
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 2px solid transparent;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.stat-card-total { border-color: #667eea; }
+.stat-card-online { border-color: #10b981; }
+.stat-card-offline { border-color: #ef4444; }
+
+.stat-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+.stat-card-total .stat-icon {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+.stat-card-online .stat-icon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+.stat-card-offline .stat-icon {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.stat-content {
+  flex: 1;
+}
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-card-total .stat-value { color: #667eea; }
+.stat-card-online .stat-value { color: #10b981; }
+.stat-card-offline .stat-value { color: #ef4444; }
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+/* 状态指示器样式 */
+.status-indicator {
+  font-size: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+}
+.status-online {
+  color: #10b981;
+  animation: pulse 2s ease-in-out infinite;
+}
+.status-offline {
+  color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .device-card { transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #dee2e6; }
 .device-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important; }
 .card-header { background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; }

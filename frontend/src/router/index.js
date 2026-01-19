@@ -5,6 +5,7 @@ import DeviceList from '../views/DeviceList.vue'
 import DeviceDetail from '../views/DeviceDetail.vue'
 import DeviceEdit from '../views/DeviceEdit.vue'
 import MqttConfig from '../views/MqttConfig.vue'
+import EmqxApiConfig from '../views/EmqxApiConfig.vue'
 import TopicConfig from '../views/TopicConfig.vue'
 import RealTimeData from '../views/RealTimeData.vue'
 import Login from '../views/Login.vue'
@@ -65,6 +66,12 @@ const routes = [
     path: '/mqtt-config',
     name: 'MqttConfig',
     component: MqttConfig,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/emqx-api-config',
+    name: 'EmqxApiConfig',
+    component: EmqxApiConfig,
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {

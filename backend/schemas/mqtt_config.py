@@ -22,11 +22,17 @@ class MQTTConfigUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     is_active: Optional[bool] = None
+    api_port: Optional[int] = None
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
 
 
 class MQTTConfig(MQTTConfigBase):
     id: int
     is_active: bool = False
+    api_port: Optional[int] = 18083
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
 
     class Config:
         from_attributes = True

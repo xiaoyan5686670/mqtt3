@@ -2,16 +2,19 @@
 import paho.mqtt.client as mqtt
 import json
 import re
+import requests
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 from core.database import SessionLocal
 from core.logging_config import get_logger
 from models.device import DeviceModel
-from models.sensor import SensorDataModel
+from models.sensor_data_new import SensorDataModel
+from models.sensor_config import SensorConfigModel
 from models.mqtt_config import MQTTConfigModel
 from services import topic_config_service
+from services import sensor_config_service
 
 logger = get_logger(__name__)
 
@@ -318,8 +321,8 @@ class MQTTService:
                     logger.warning(f"转换数值失败: {match.group(1)}, 错误: {e}")
 
     def save_sensor_data(self, device_id: int, sensor_type: str, value: float, unit: str, display_name: str = None):
-        """保存传感器数据到数据库（每次创建新记录，保留历史数据）"""
-        # 确定默认的最小值和最大值（改进为不区分大小写，且支持包含关系）
+        """保存传感器数据到数据库（使用新架构：配置和数据分离）"""
+        # 确定默认的最小值和最大值
         min_value = 0.0
         max_value = 100.0
         
@@ -345,17 +348,23 @@ class MQTTService:
         except:
             pass
         
-        # 每次都创建新记录，保留历史数据
-        sensor_data = SensorDataModel(
+        # 获取或创建传感器配置（配置只创建一次）
+        sensor_config = sensor_config_service.get_or_create_sensor_config(
+            db=self.db,
             device_id=device_id,
-            type=sensor_type, # 保持原始 key
-            value=value,
+            sensor_type=sensor_type,
             unit=unit,
-            timestamp=datetime.utcnow(),
+            display_name=display_name,
             min_value=min_value,
-            max_value=max_value,
-            alert_status=alert_status,
-            display_name=display_name # 保存显示名称
+            max_value=max_value
+        )
+        
+        # 创建传感器数据记录（只包含时序数据）
+        sensor_data = SensorDataModel(
+            sensor_config_id=sensor_config.id,
+            value=value,
+            timestamp=datetime.utcnow(),
+            alert_status=alert_status
         )
         self.db.add(sensor_data)
 
@@ -421,6 +430,65 @@ class MQTTService:
         except Exception as e:
             logger.error(f"发布消息时出错: {e}", exc_info=True)
             return False
+
+    def get_emqx_clients(self) -> Dict[str, Any]:
+        """从EMQX API获取客户端连接状态"""
+        try:
+            if not self.db:
+                self.db = SessionLocal()
+            
+            # 获取MQTT配置
+            mqtt_config = self.db.query(MQTTConfigModel).filter(
+                MQTTConfigModel.is_active == True
+            ).first()
+            
+            if not mqtt_config:
+                logger.warning("未找到激活的MQTT配置")
+                return {"data": [], "meta": {"count": 0}}
+            
+            # 检查是否配置了 API Key
+            api_key = mqtt_config.api_key
+            api_secret = mqtt_config.api_secret
+            
+            if not api_key or not api_secret:
+                logger.warning("未配置 EMQX API Key，请在系统中配置 API 密钥")
+                return {"data": [], "meta": {"count": 0}}
+            
+            # 构建EMQX API URL
+            api_port = mqtt_config.api_port or 18083
+            api_url = f"http://{mqtt_config.server}:{api_port}/api/v5/clients"
+            
+            logger.info(f"正在调用 EMQX API: {api_url}")
+            
+            # 使用 API Key 和 Secret Key 进行认证
+            response = requests.get(
+                api_url,
+                auth=(api_key, api_secret),
+                timeout=10,
+                params={'limit': 10000}  # 获取更多客户端
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                client_count = len(data.get('data', []))
+                logger.info(f"✅ 成功获取 EMQX 客户端列表，共 {client_count} 个客户端")
+                return data
+            elif response.status_code == 401:
+                logger.error("❌ EMQX API 认证失败，请检查 API Key 和 Secret Key 是否正确")
+                return {"data": [], "meta": {"count": 0}}
+            else:
+                logger.error(f"❌ 获取 EMQX 客户端列表失败，状态码: {response.status_code}, 响应: {response.text}")
+                return {"data": [], "meta": {"count": 0}}
+                
+        except requests.exceptions.Timeout:
+            logger.error("❌ EMQX API 请求超时")
+            return {"data": [], "meta": {"count": 0}}
+        except requests.exceptions.ConnectionError:
+            logger.error("❌ 无法连接到 EMQX API，请检查服务器地址和端口")
+            return {"data": [], "meta": {"count": 0}}
+        except Exception as e:
+            logger.error(f"❌ 获取 EMQX 客户端状态时出错: {e}", exc_info=True)
+            return {"data": [], "meta": {"count": 0}}
 
     def stop(self):
         """停止MQTT服务"""

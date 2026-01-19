@@ -14,3 +14,8 @@ class MQTTConfigModel(Base):
     username = Column(String, nullable=True)
     password = Column(String, nullable=True)
     is_active = Column(Boolean, default=False, nullable=False)
+    
+    # EMQX API 配置字段
+    api_port = Column(Integer, default=18083, nullable=True)
+    api_key = Column(String, nullable=True)
+    api_secret = Column(String, nullable=True)

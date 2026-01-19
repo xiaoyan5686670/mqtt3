@@ -1,5 +1,6 @@
 """设备模型"""
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from core.database import Base
 
@@ -19,3 +20,6 @@ class DeviceModel(Base):
     mqtt_config_id = Column(Integer, nullable=True)
     topic_config_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)  # 设备创建时间
+    
+    # 关系
+    sensor_configs = relationship("SensorConfigModel", back_populates="device", cascade="all, delete-orphan")

@@ -50,3 +50,21 @@ async def publish_message(
             status_code=500,
             detail=f"发布消息时出错: {str(e)}"
         )
+
+
+@router.get("/clients")
+async def get_mqtt_clients(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """获取EMQX客户端连接状态列表（仅管理员）"""
+    try:
+        mqtt_service = get_mqtt_service()
+        clients_data = mqtt_service.get_emqx_clients()
+        return clients_data
+    except Exception as e:
+        logger.error(f"获取MQTT客户端列表API错误: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取客户端列表时出错: {str(e)}"
+        )
