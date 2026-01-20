@@ -72,12 +72,15 @@ def get_device_sensor_history(
     if time_range:
         now = datetime.utcnow()
         if time_range == "day":
-            start_dt = now - timedelta(days=1)
+            # 今天的数据：从今天00:00:00到现在
+            start_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
             end_dt = now
         elif time_range == "week":
+            # 最近7天的数据
             start_dt = now - timedelta(weeks=1)
             end_dt = now
         elif time_range == "month":
+            # 最近30天的数据
             start_dt = now - timedelta(days=30)
             end_dt = now
         else:

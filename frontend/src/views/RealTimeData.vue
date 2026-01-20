@@ -301,6 +301,14 @@ export default {
       try {
         const res = await axios.get('/api/devices')
         devices.value = res.data
+        // 自动选择第一个设备
+        if (devices.value.length > 0 && !selectedDeviceId.value) {
+          selectedDeviceId.value = devices.value[0].id
+          // 触发设备数据加载
+          nextTick(() => {
+            onDeviceChange()
+          })
+        }
       } catch (e) { console.error(e) }
     }
 

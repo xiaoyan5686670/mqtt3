@@ -45,8 +45,18 @@ def get_latest_device_sensors(db: Session, device_id: int) -> List[dict]:
         SensorConfigModel.device_id == device_id
     ).all()
     
-    result = []
+    # 使用字典来去重，确保每个传感器类型只保留一个配置（最新更新的）
+    config_map = {}
     for config in configs:
+        if config.type not in config_map:
+            config_map[config.type] = config
+        else:
+            # 如果已存在该类型，保留 updated_at 更新的那个
+            if config.updated_at > config_map[config.type].updated_at:
+                config_map[config.type] = config
+    
+    result = []
+    for config in config_map.values():
         # 获取该配置的最新数据
         latest_data = db.query(SensorDataModel).filter(
             SensorDataModel.sensor_config_id == config.id
