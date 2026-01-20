@@ -116,11 +116,11 @@
                     <button 
                       v-if="sensor.type.toLowerCase().includes('relay') || sensor.type.toLowerCase().includes('switch')"
                       class="control-btn" 
-                      :class="{ 'active': sensor.value === 1, 'loading': sendingRelayId === `${selectedDeviceId}-${sensor.type}` }"
+                      :class="{ 'active': sensor.value === 1, 'loading': isRelaySending(sensor.type) }"
                       @click="toggleRelay(sensor)"
-                      :disabled="sendingRelayId === `${selectedDeviceId}-${sensor.type}`"
+                      :disabled="isRelaySending(sensor.type)"
                     >
-                      <div v-if="sendingRelayId === `${selectedDeviceId}-${sensor.type}`" class="spinner-border spinner-border-sm"></div>
+                      <div v-if="isRelaySending(sensor.type)" class="spinner-border spinner-border-sm"></div>
                       <span v-else>{{ sensor.value === 1 ? 'ON' : 'OFF' }}</span>
                     </button>
                     <div v-else class="status-pill" :class="sensor.value > 0 ? 'high' : 'low'">
@@ -233,7 +233,10 @@ export default {
     const loadingData = ref(false)
     const error = ref('')
     const sendingRelayId = ref(null)
+    const relayToggleLock = ref(new Set())
+    const relayExpectedStates = ref(new Map())
     const timeRange = ref('realtime')
+    const allTopicConfigs = ref([])
     
     // 初始化日期区间 (用于月维度)
     const getInitialDateRange = () => {
@@ -250,6 +253,13 @@ export default {
     const chart1Ref = ref(null)
     let chart1 = null
     const chartData = ref({ timeStamps: [] })
+
+    // 判断是否为继电器/开关类型
+    const isRelayType = (type) => {
+      if (!type) return false
+      const t = type.toLowerCase()
+      return t.includes('relay') || t.includes('开关') || t.includes('switch')
+    }
 
     // 分类传感器
     const dynamicPrioritySensors = computed(() => {
@@ -297,6 +307,22 @@ export default {
 
     const formatValue = (val) => typeof val === 'number' ? val.toFixed(1) : val
 
+    // 获取所有主题配置
+    const fetchAllTopicConfigs = async () => {
+      try {
+        const response = await axios.get('/api/topic-configs')
+        allTopicConfigs.value = response.data || []
+      } catch (error) {
+        console.error('获取主题配置失败:', error)
+      }
+    }
+    
+    // 根据设备的 topic_config_id 获取对应的主题配置
+    const getDeviceTopicConfig = (device) => {
+      if (!device.topic_config_id) return null
+      return allTopicConfigs.value.find(c => c.id === device.topic_config_id)
+    }
+
     const fetchDevices = async () => {
       try {
         const res = await axios.get('/api/devices')
@@ -317,7 +343,24 @@ export default {
       if (allSensors.value.length === 0) loadingData.value = true
       try {
         const res = await axios.get(`/api/devices/${selectedDeviceId.value}/latest-sensors`)
-        allSensors.value = res.data
+        const sensors = res.data
+        
+        // 处理继电器期望状态（与 Dashboard.vue 保持一致）
+        sensors.forEach(sensor => {
+          if (isRelayType(sensor.type)) {
+            const key = `${selectedDeviceId.value}-${sensor.type}`
+            const exp = relayExpectedStates.value.get(key)
+            if (exp && (Date.now() - exp.timestamp < exp.timeout)) {
+              if (sensor.value === exp.value) {
+                relayExpectedStates.value.delete(key)
+              } else {
+                sensor.value = exp.value
+              }
+            }
+          }
+        })
+        
+        allSensors.value = sensors
         if (timeRange.value === 'realtime') updateChartsRealtime()
       } catch (err) { error.value = err.message } finally { loadingData.value = false }
     }
@@ -537,17 +580,55 @@ export default {
       })
     }
 
+    const isRelaySending = (type) => {
+      const key = `${selectedDeviceId.value}-${type}`
+      return sendingRelayId.value === key || relayToggleLock.value.has(key)
+    }
+
     const toggleRelay = async (sensor) => {
       const device = devices.value.find(d => d.id == selectedDeviceId.value)
       if (!device) return
-      const sensorKey = `${device.id}-${sensor.type}`
-      sendingRelayId.value = sensorKey
+      
+      const key = `${device.id}-${sensor.type}`
+      if (isRelaySending(sensor.type)) return
+      
+      // 获取设备关联的主题配置
+      const deviceTopicConfig = getDeviceTopicConfig(device)
+      
+      // 方案A：设备必须通过 topic_config_id 关联主题配置，并且主题配置中必须配置继电器格式
+      if (!deviceTopicConfig) {
+        alert(`设备 ${device.name} 未关联主题配置，无法控制继电器！\n请在设备编辑页面关联主题配置。`)
+        return
+      }
+      
+      if (!deviceTopicConfig.relay_on_payload || !deviceTopicConfig.relay_off_payload) {
+        alert(`设备 ${device.name} 关联的主题配置未设置继电器控制格式！\n请在主题配置页面设置继电器开启/关闭消息格式。`)
+        return
+      }
+      
+      sendingRelayId.value = key
+      relayToggleLock.value.add(key)
       try {
         const topic = device.publish_topic || `pc/${device.id}`
-        const message = sensor.value > 0 ? 'relayoff' : 'relayon'
-        await axios.post('/api/mqtt-publish/publish', { topic, message })
-        setTimeout(fetchRealTimeData, 500)
-      } catch (e) { error.value = e.message } finally { sendingRelayId.value = null }
+        
+        // 只使用主题配置中的继电器格式（一对一关系）
+        const msg = sensor.value > 0 
+          ? deviceTopicConfig.relay_off_payload  // 关闭继电器
+          : deviceTopicConfig.relay_on_payload   // 开启继电器
+        
+        const res = await axios.post('/api/mqtt-publish/publish', { topic, message: msg })
+        if (res.data.success) {
+          const val = sensor.value > 0 ? 0 : 1
+          relayExpectedStates.value.set(key, { value: val, timestamp: Date.now(), timeout: 5000 })
+          sensor.value = val
+        }
+      } catch (e) { 
+        alert('发送失败')
+        error.value = e.message 
+      } finally { 
+        sendingRelayId.value = null
+        relayToggleLock.value.delete(key)
+      }
     }
 
     const onDeviceChange = () => {
@@ -576,7 +657,8 @@ export default {
     const getRangeIcon = (r) => ({ realtime: 'fas fa-bolt', day: 'fas fa-calendar-day', week: 'fas fa-calendar-week', month: 'fas fa-calendar-alt' }[r])
     const getRangeText = (r) => ({ realtime: '实时', day: '日维度', week: '周趋势', month: '月分析' }[r])
 
-    onMounted(() => {
+    onMounted(async () => {
+      await fetchAllTopicConfigs()
       fetchDevices()
       window.realtimeInterval = setInterval(() => {
         if (selectedDeviceId.value && timeRange.value === 'realtime') fetchRealTimeData()
@@ -588,7 +670,7 @@ export default {
       devices, selectedDeviceId, allSensors, loadingData, error, sendingRelayId,
       dynamicPrioritySensors, controlSensors, otherSensors, getDisplayName,
       getSensorClass, getSensorIcon, getControlIcon, formatValue,
-      onDeviceChange, setTimeRange, refreshData, getRangeIcon, getRangeText, toggleRelay,
+      onDeviceChange, setTimeRange, refreshData, getRangeIcon, getRangeText, toggleRelay, isRelaySending,
       chart1Ref, timeRange, startDate, endDate
     }
   }

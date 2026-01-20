@@ -626,34 +626,29 @@ export default {
     const toggleRelay = async (device, sensor) => {
       const key = `${device.id}-${sensor.type}`
       if (isRelaySending(device.id, sensor.type)) return
+      
+      // 获取设备关联的主题配置
+      const deviceTopicConfig = getDeviceTopicConfig(device)
+      
+      // 方案A：设备必须通过 topic_config_id 关联主题配置，并且主题配置中必须配置继电器格式
+      if (!deviceTopicConfig) {
+        alert(`设备 ${device.name} 未关联主题配置，无法控制继电器！\n请在设备编辑页面关联主题配置。`)
+        return
+      }
+      
+      if (!deviceTopicConfig.relay_on_payload || !deviceTopicConfig.relay_off_payload) {
+        alert(`设备 ${device.name} 关联的主题配置未设置继电器控制格式！\n请在主题配置页面设置继电器开启/关闭消息格式。`)
+        return
+      }
+      
       sendingRelayId.value = key; relayToggleLock.value.add(key)
       try {
         const topic = device.publish_topic || `pc/${device.id}`
         
-        // 获取设备关联的主题配置
-        const deviceTopicConfig = getDeviceTopicConfig(device)
-        
-        // 根据配置决定消息格式（优先级：设备配置 > 设备关联的主题配置 > 默认值）
-        let msg
-        if (sensor.value > 0) {
-          // 关闭继电器 - 按优先级查找配置
-          if (device.relay_off_payload) {
-            msg = device.relay_off_payload  // 设备级别配置（最高优先级）
-          } else if (deviceTopicConfig && deviceTopicConfig.relay_off_payload) {
-            msg = deviceTopicConfig.relay_off_payload  // 设备关联的主题配置
-          } else {
-            msg = 'relayoff'  // 默认值
-          }
-        } else {
-          // 开启继电器 - 按优先级查找配置
-          if (device.relay_on_payload) {
-            msg = device.relay_on_payload  // 设备级别配置（最高优先级）
-          } else if (deviceTopicConfig && deviceTopicConfig.relay_on_payload) {
-            msg = deviceTopicConfig.relay_on_payload  // 设备关联的主题配置
-          } else {
-            msg = 'relayon'  // 默认值
-          }
-        }
+        // 只使用主题配置中的继电器格式（一对一关系）
+        const msg = sensor.value > 0 
+          ? deviceTopicConfig.relay_off_payload  // 关闭继电器
+          : deviceTopicConfig.relay_on_payload   // 开启继电器
         
         const res = await axios.post('/api/mqtt-publish/publish', { topic, message: msg })
         if (res.data.success) {
