@@ -134,7 +134,12 @@
                       <h6 class="mb-0 me-2 device-name">
                         <i class="fas fa-microchip me-1"></i>
                         <span v-if="editingDeviceId !== deviceData.device.id" class="device-name-wrapper">
-                          {{ getDeviceDisplayName(deviceData.device) }}
+                          <span 
+                            class="device-name-text" 
+                            :title="getDeviceDisplayName(deviceData.device)"
+                          >
+                            {{ getDeviceDisplayName(deviceData.device) }}
+                          </span>
                           <button 
                             v-if="authStore.canEdit"
                             class="btn-edit-device"
@@ -180,9 +185,14 @@
                         {{ deviceData.device.device_type }}
                       </span>
                     </div>
-                    <small class="text-muted">
+                    <small class="text-muted device-location-wrapper">
                       <i class="fas fa-map-marker-alt me-1"></i>
-                      {{ deviceData.device.location || '未知位置' }}
+                      <span 
+                        class="device-location" 
+                        :title="deviceData.device.location || '未知位置'"
+                      >
+                        {{ deviceData.device.location || '未知位置' }}
+                      </span>
                     </small>
                   </div>
                   <div class="device-icon">
@@ -204,7 +214,12 @@
                       <div class="metric-card">
                         <div class="metric-label">
                           <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
-                            {{ getSensorDisplayName(sensor) }}
+                            <span 
+                              class="sensor-label-text" 
+                              :title="getSensorDisplayName(sensor)"
+                            >
+                              {{ getSensorDisplayName(sensor) }}
+                            </span>
                             <button 
                               v-if="authStore.canEdit"
                               class="btn-edit-sensor"
@@ -264,10 +279,15 @@
                     :key="sensor.id"
                     class="sensor-row mb-1"
                   >
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center sensor-row-content">
                       <span class="sensor-label">
                         <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
-                          {{ getSensorDisplayName(sensor) }}
+                          <span 
+                            class="sensor-label-text" 
+                            :title="getSensorDisplayName(sensor)"
+                          >
+                            {{ getSensorDisplayName(sensor) }}
+                          </span>
                           <button 
                             v-if="authStore.canEdit"
                             class="btn-edit-sensor"
@@ -304,8 +324,11 @@
                           </button>
                         </div>
                       </span>
-                      <div class="d-flex align-items-center gap-2">
-                        <span class="sensor-value-small me-2">
+                      <div class="d-flex align-items-center gap-2 sensor-value-actions">
+                        <span 
+                          class="sensor-value-small me-2" 
+                          :title="`${formatSensorValue(sensor.value)}${sensor.unit || ''}`"
+                        >
                           {{ formatSensorValue(sensor.value) }}{{ sensor.unit || '' }}
                         </span>
                         <span 
@@ -765,29 +788,130 @@ export default {
   50% { opacity: 0.5; }
 }
 
-.device-card { transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #dee2e6; }
+.device-card { 
+  transition: transform 0.2s, box-shadow 0.2s; 
+  border: 1px solid #dee2e6; 
+  display: flex;
+  flex-direction: column;
+}
 .device-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important; }
+.device-card .card-body {
+  flex-grow: 1;
+  min-height: 150px;
+}
 .card-header { background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; }
 .device-name { font-size: 0.95rem; font-weight: 600; color: #212529; }
+.device-name-text {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
 .device-icon { opacity: 0.6; }
+.device-location-wrapper {
+  display: block;
+  width: 100%;
+}
+.device-location {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
 .priority-metrics { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-radius: 6px; padding: 8px; border: 1px solid #e3f2fd; }
 .metric-card { background: white; border-radius: 4px; padding: 8px; border-left: 3px solid #2196F3; }
-.metric-label { font-size: 0.75rem; color: #6c757d; margin-bottom: 4px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
-.metric-value { font-size: 1.3rem; font-weight: 700; color: #2196F3; line-height: 1.2; }
+.metric-label { 
+  font-size: 0.75rem; 
+  color: #6c757d; 
+  margin-bottom: 4px; 
+  font-weight: 500; 
+  display: flex; 
+  align-items: center; 
+  gap: 4px;
+  min-height: 20px;
+}
+.metric-value { 
+  font-size: 1.3rem; 
+  font-weight: 700; 
+  color: #2196F3; 
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .metric-unit { font-size: 0.8rem; color: #6c757d; font-weight: 400; }
 .metric-bar { height: 4px; background-color: #e9ecef; border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .metric-progress { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
 .other-sensors { margin-top: 8px; }
 .sensor-row { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
-.sensor-label { font-size: 0.8rem; color: #6c757d; display: flex; align-items: center; gap: 4px; }
-.sensor-name-wrapper, .device-name-wrapper { display: inline-flex; align-items: center; gap: 4px; cursor: default; }
+.sensor-row-content {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sensor-label { 
+  font-size: 0.8rem; 
+  color: #6c757d; 
+  display: flex; 
+  align-items: center; 
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.sensor-label-text {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+.sensor-name-wrapper, .device-name-wrapper { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 4px; 
+  cursor: default;
+  min-width: 0;
+  max-width: 100%;
+}
+.sensor-value-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
 .btn-edit-sensor, .btn-edit-device { background: transparent; border: none; color: #6c757d; padding: 2px 6px; cursor: pointer; opacity: 0.3; font-size: 0.7rem; border-radius: 3px; }
 .sensor-name-wrapper:hover .btn-edit-sensor, .device-name-wrapper:hover .btn-edit-device, .device-card:hover .btn-edit-device { opacity: 1; }
 .btn-edit-sensor:hover, .btn-edit-device:hover { color: #007bff; background: rgba(0, 123, 255, 0.15); }
 .sensor-edit-input, .device-edit-input { display: flex; align-items: center; gap: 4px; width: 100%; }
-.relay-toggle-btn { padding: 2px 8px; font-size: 0.7rem; min-width: 60px; }
-.sensor-value-small { font-size: 0.85rem; font-weight: 600; color: #495057; }
-.device-info { font-size: 0.75rem; }
+.relay-toggle-btn { 
+  padding: 2px 8px; 
+  font-size: 0.7rem; 
+  min-width: 60px;
+  white-space: nowrap;
+}
+.sensor-value-small { 
+  font-size: 0.85rem; 
+  font-weight: 600; 
+  color: #495057;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.device-info { 
+  font-size: 0.75rem;
+  overflow: hidden;
+}
+.device-info span {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 .search-container { margin: 0 -15px 20px -15px; padding: 0 15px; }
 .search-box { max-width: 600px; margin: 0 auto; }
 .search-input-wrapper { position: relative; display: flex; align-items: center; background: #ffffff; border: 2px solid #e9ecef; border-radius: 12px; padding: 0 16px; }
@@ -796,4 +920,101 @@ export default {
 .banner-container { height: 200px; display: flex; align-items: center; justify-content: center; position: relative; }
 .banner-image { max-height: 100%; object-fit: contain; }
 .banner-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; color: white; }
+
+/* 响应式改进 */
+@media (max-width: 768px) {
+  .device-name-text {
+    max-width: 140px;
+  }
+  
+  .sensor-label-text {
+    max-width: 100px;
+  }
+  
+  .sensor-row-content {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  
+  .sensor-value-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+  
+  .relay-toggle-btn {
+    margin-top: 4px;
+  }
+  
+  .device-info span {
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 576px) {
+  .device-name-text {
+    max-width: 120px;
+  }
+  
+  .sensor-label-text {
+    max-width: 80px;
+  }
+  
+  .stat-card {
+    padding: 15px;
+  }
+  
+  .stat-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .banner-container {
+    height: 150px;
+  }
+}
+
+/* 改进卡片视觉一致性 */
+.metric-card {
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* 改进搜索框在小屏幕的显示 */
+@media (max-width: 576px) {
+  .search-input {
+    font-size: 0.9rem;
+    padding: 10px 6px;
+  }
+  
+  .search-input-wrapper {
+    padding: 0 12px;
+  }
+}
+
+/* 提升 tooltip 体验 */
+[title] {
+  cursor: help;
+}
+
+.device-name-text[title],
+.sensor-label-text[title],
+.device-location[title] {
+  cursor: default;
+}
+
+/* 改进编辑输入框的响应式 */
+@media (max-width: 768px) {
+  .sensor-edit-input input,
+  .device-edit-input input {
+    max-width: 150px;
+  }
+}
 </style>
