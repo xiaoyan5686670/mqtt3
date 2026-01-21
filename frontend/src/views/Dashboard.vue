@@ -82,6 +82,115 @@
       </div>
     </div>
 
+    <!-- STM32_4 温度监控专区 -->
+    <div v-if="stm32Device" class="row mb-4">
+      <div class="col-12">
+        <div class="card temperature-monitor-card">
+          <div class="card-header bg-gradient-primary text-white">
+            <h5 class="mb-0">
+              <i class="fas fa-thermometer-half me-2"></i>
+              {{ getDeviceDisplayName(stm32Device.device) }} - 温度监控
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <!-- 压缩机1组件 -->
+              <div class="col-xl-6 col-lg-6 col-md-12 col-sm-12">
+                <div class="compressor-group" :class="getCompressorGroupClass(1)">
+                  <div class="compressor-header">
+                    <div class="compressor-icon-wrapper">
+                      <i 
+                        class="fas fa-fan compressor-fan-icon" 
+                        :class="{ 'fan-rotating': isCompressorNormal(1) }"
+                      ></i>
+                    </div>
+                    <h6 class="compressor-title">压缩机1 (Compressor 1)</h6>
+                  </div>
+                  <div class="temperature-pair">
+                    <div class="temp-item">
+                      <div class="temp-item-label">
+                        <i class="fas fa-arrow-down me-1"></i>入口温度
+                      </div>
+                      <div class="temp-item-value" :class="{ 'temp-danger': !isCompressorNormal(1) }">
+                        {{ getCompressorTemp(1, 'in') }}
+                        <span class="temp-unit">℃</span>
+                      </div>
+                    </div>
+                    <div class="temp-arrow">
+                      <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <div class="temp-item">
+                      <div class="temp-item-label">
+                        <i class="fas fa-arrow-up me-1"></i>出口温度
+                      </div>
+                      <div class="temp-item-value" :class="{ 'temp-danger': !isCompressorNormal(1) }">
+                        {{ getCompressorTemp(1, 'out') }}
+                        <span class="temp-unit">℃</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="compressor-status">
+                    <span v-if="isCompressorNormal(1)" class="badge bg-success">
+                      <i class="fas fa-check-circle me-1"></i>正常运行
+                    </span>
+                    <span v-else class="badge bg-danger">
+                      <i class="fas fa-exclamation-triangle me-1"></i>温度异常 (出口 < 入口)
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 压缩机2组件 -->
+              <div class="col-xl-6 col-lg-6 col-md-12 col-sm-12">
+                <div class="compressor-group" :class="getCompressorGroupClass(2)">
+                  <div class="compressor-header">
+                    <div class="compressor-icon-wrapper">
+                      <i 
+                        class="fas fa-fan compressor-fan-icon" 
+                        :class="{ 'fan-rotating': isCompressorNormal(2) }"
+                      ></i>
+                    </div>
+                    <h6 class="compressor-title">压缩机2 (Compressor 2)</h6>
+                  </div>
+                  <div class="temperature-pair">
+                    <div class="temp-item">
+                      <div class="temp-item-label">
+                        <i class="fas fa-arrow-down me-1"></i>入口温度
+                      </div>
+                      <div class="temp-item-value" :class="{ 'temp-danger': !isCompressorNormal(2) }">
+                        {{ getCompressorTemp(2, 'in') }}
+                        <span class="temp-unit">℃</span>
+                      </div>
+                    </div>
+                    <div class="temp-arrow">
+                      <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <div class="temp-item">
+                      <div class="temp-item-label">
+                        <i class="fas fa-arrow-up me-1"></i>出口温度
+                      </div>
+                      <div class="temp-item-value" :class="{ 'temp-danger': !isCompressorNormal(2) }">
+                        {{ getCompressorTemp(2, 'out') }}
+                        <span class="temp-unit">℃</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="compressor-status">
+                    <span v-if="isCompressorNormal(2)" class="badge bg-success">
+                      <i class="fas fa-check-circle me-1"></i>正常运行
+                    </span>
+                    <span v-else class="badge bg-danger">
+                      <i class="fas fa-exclamation-triangle me-1"></i>温度异常 (出口 < 入口)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 设备数据卡片网格 -->
     <div class="row">
       <div class="col-12">
@@ -797,6 +906,49 @@ export default {
 
     const formatShortDate = (d) => d ? new Date(d).toLocaleDateString('zh-CN') : ''
 
+    // STM32_4 设备的温度监控
+    const stm32Device = computed(() => {
+      return devicesWithSensors.value.find(d => 
+        d.device.name === 'stm32_4' || 
+        (d.device.display_name && d.device.display_name.toLowerCase().includes('stm32_4'))
+      )
+    })
+    
+    // 获取压缩机温度值
+    const getCompressorTemp = (compressorNum, type) => {
+      if (!stm32Device.value) return '--'
+      const sensorType = `comp${compressorNum}_${type}_temperature_F`
+      const sensor = stm32Device.value.sensors.find(s => s.type === sensorType)
+      if (!sensor || sensor.value === null || sensor.value === undefined) return '--'
+      return formatSensorValue(sensor.value)
+    }
+    
+    // 判断压缩机是否正常运行（出口温度应该 >= 入口温度）
+    const isCompressorNormal = (compressorNum) => {
+      if (!stm32Device.value) return false
+      
+      const inSensorType = `comp${compressorNum}_in_temperature_F`
+      const outSensorType = `comp${compressorNum}_out_temperature_F`
+      
+      const inSensor = stm32Device.value.sensors.find(s => s.type === inSensorType)
+      const outSensor = stm32Device.value.sensors.find(s => s.type === outSensorType)
+      
+      // 如果任一传感器数据缺失，视为异常
+      if (!inSensor || !outSensor || 
+          inSensor.value === null || inSensor.value === undefined ||
+          outSensor.value === null || outSensor.value === undefined) {
+        return false
+      }
+      
+      // 正常：出口温度 >= 入口温度
+      // 异常：出口温度 < 入口温度
+      return outSensor.value >= inSensor.value
+    }
+    
+    const getCompressorGroupClass = (compressorNum) => {
+      return isCompressorNormal(compressorNum) ? 'compressor-normal' : 'compressor-abnormal'
+    }
+
     onMounted(async () => {
       await fetchAllTopicConfigs()
       await fetchDevicesWithSensors()
@@ -806,6 +958,7 @@ export default {
 
     return {
       devices, devicesWithSensors, filteredDevices, isLoading, searchKeyword, authStore,
+      stm32Device, getCompressorTemp, isCompressorNormal, getCompressorGroupClass,
       editingSensorId, editingSensorName, editingDeviceId, editingDeviceName, 
       editingRelayInId, editingRelayInName, sendingRelayId,
       onlineDevices: computed(() => devicesWithSensors.value.filter(d => d.isOnline).length),
@@ -1233,6 +1386,252 @@ export default {
   .sensor-edit-input input,
   .device-edit-input input {
     max-width: 150px;
+  }
+}
+
+/* STM32_4 温度监控专区样式 */
+.temperature-monitor-card {
+  border: 2px solid #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* 压缩机组件样式 */
+.compressor-group {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  border: 3px solid transparent;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.compressor-group.compressor-normal {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.compressor-group.compressor-abnormal {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+  animation: compressorPulse 2s ease-in-out infinite;
+}
+
+@keyframes compressorPulse {
+  0%, 100% { 
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  }
+  50% { 
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.6);
+  }
+}
+
+.compressor-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.compressor-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  flex-shrink: 0;
+}
+
+.compressor-fan-icon {
+  font-size: 32px;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.fan-rotating {
+  animation: fanRotate 2s linear infinite;
+}
+
+@keyframes fanRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.compressor-group.compressor-abnormal .compressor-fan-icon {
+  animation: none !important;
+  color: #fca5a5;
+}
+
+.compressor-group.compressor-abnormal .compressor-icon-wrapper {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.compressor-title {
+  flex: 1;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #374151;
+  margin: 0;
+}
+
+/* 温度对显示 */
+.temperature-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.temp-item {
+  flex: 1;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.temp-item-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.temp-item-value {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #10b981;
+  line-height: 1;
+  transition: color 0.3s ease;
+}
+
+.temp-item-value.temp-danger {
+  color: #ef4444;
+  animation: tempValuePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tempValuePulse {
+  0%, 100% { 
+    opacity: 1;
+  }
+  50% { 
+    opacity: 0.7;
+  }
+}
+
+.temp-unit {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+.temp-arrow {
+  font-size: 2rem;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.compressor-group.compressor-abnormal .temp-arrow {
+  color: #ef4444;
+}
+
+.compressor-status {
+  text-align: center;
+  margin-top: auto;
+}
+
+.compressor-status .badge {
+  padding: 8px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .compressor-group {
+    padding: 20px;
+  }
+  
+  .compressor-icon-wrapper {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .compressor-fan-icon {
+    font-size: 26px;
+  }
+  
+  .compressor-title {
+    font-size: 1rem;
+  }
+  
+  .temperature-pair {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .temp-arrow {
+    transform: rotate(90deg);
+    font-size: 1.5rem;
+  }
+  
+  .temp-item-value {
+    font-size: 1.8rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .compressor-group {
+    padding: 16px;
+  }
+  
+  .compressor-header {
+    gap: 12px;
+  }
+  
+  .compressor-icon-wrapper {
+    width: 45px;
+    height: 45px;
+  }
+  
+  .compressor-fan-icon {
+    font-size: 22px;
+  }
+  
+  .compressor-title {
+    font-size: 0.95rem;
+  }
+  
+  .temp-item {
+    padding: 12px;
+  }
+  
+  .temp-item-value {
+    font-size: 1.6rem;
+  }
+  
+  .temp-item-label {
+    font-size: 0.75rem;
   }
 }
 </style>
