@@ -114,7 +114,7 @@
                       </div>
                     </div>
                     <button 
-                      v-if="sensor.type.toLowerCase().includes('relay') || sensor.type.toLowerCase().includes('switch')"
+                      v-if="(sensor.type.toLowerCase().includes('relay') || sensor.type.toLowerCase().includes('switch')) && !isReadOnlyRelayInput(sensor.type)"
                       class="control-btn" 
                       :class="{ 'active': sensor.value === 1, 'loading': isRelaySending(sensor.type) }"
                       @click="toggleRelay(sensor)"
@@ -261,6 +261,13 @@ export default {
       return t.includes('relay') || t.includes('开关') || t.includes('switch')
     }
 
+    // 判断是否为只读的继电器输入类型（不应该显示控制按钮）
+    const isReadOnlyRelayInput = (type) => {
+      if (!type) return false
+      const t = type.toLowerCase()
+      return t === 'realy_in_status' || t === 'relay_in_status'
+    }
+
     // 分类传感器
     const dynamicPrioritySensors = computed(() => {
       return allSensors.value.filter(s => {
@@ -272,6 +279,8 @@ export default {
     const controlSensors = computed(() => {
       return allSensors.value.filter(s => {
         const t = s.type.toLowerCase()
+        // 排除只读的继电器输入
+        if (isReadOnlyRelayInput(s.type)) return false
         return t.includes('relay') || t.includes('pb8') || t.includes('switch') || t.includes('level')
       })
     })
@@ -279,7 +288,8 @@ export default {
     const otherSensors = computed(() => {
       return allSensors.value.filter(s => {
         const t = s.type.toLowerCase()
-        return !t.includes('temp') && !t.includes('hum') && !t.includes('relay') && !t.includes('pb8') && !t.includes('switch') && !t.includes('level')
+        // 排除优先传感器、控制类传感器和只读继电器输入
+        return !t.includes('temp') && !t.includes('hum') && !t.includes('relay') && !t.includes('pb8') && !t.includes('switch') && !t.includes('level') && !isReadOnlyRelayInput(s.type)
       })
     })
 
@@ -371,7 +381,12 @@ export default {
       loadingData.value = true
       error.value = ''
       try {
-        const params = { limit: timeRange.value === 'month' ? 5000 : 2000 }
+        // 根据时间维度设置合适的数据量限制
+        // 周维度：7天 * 24小时 * 360条/小时（每10秒一条）* 传感器数量(约10个) = 约60万条
+        // 为保险起见，周维度取50000条，月维度取150000条
+        const params = { 
+          limit: timeRange.value === 'month' ? 150000 : timeRange.value === 'week' ? 50000 : 10000 
+        }
         if (timeRange.value === 'month') {
           params.start_time = `${startDate.value}T00:00:00`
           params.end_time = `${endDate.value}T23:59:59`
@@ -671,7 +686,7 @@ export default {
       dynamicPrioritySensors, controlSensors, otherSensors, getDisplayName,
       getSensorClass, getSensorIcon, getControlIcon, formatValue,
       onDeviceChange, setTimeRange, refreshData, getRangeIcon, getRangeText, toggleRelay, isRelaySending,
-      chart1Ref, timeRange, startDate, endDate
+      chart1Ref, timeRange, startDate, endDate, isReadOnlyRelayInput
     }
   }
 }

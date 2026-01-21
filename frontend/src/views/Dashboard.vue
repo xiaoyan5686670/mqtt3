@@ -199,9 +199,49 @@
                     <!-- 继电器输入状态指示器（只读，显示外部输入状态） -->
                     <div 
                       class="relay-in-status-indicator mb-2"
-                      :title="'继电器输入状态（只读）: ' + (getRelayInStatusValue(deviceData.sensors) > 0 ? 'ON（有输入）' : 'OFF（无输入）')"
+                      :title="getRelayInDisplayName(deviceData.device) + '状态（只读）: ' + (getRelayInStatusValue(deviceData.sensors) > 0 ? 'ON（有输入）' : 'OFF（无输入）')"
                     >
-                      <div class="status-label">继电器输入</div>
+                      <div class="relay-label-wrapper">
+                        <span v-if="editingRelayInId !== deviceData.device.id" class="relay-in-name-wrapper">
+                          <span class="status-label" :title="getRelayInDisplayName(deviceData.device)">
+                            {{ getRelayInDisplayName(deviceData.device) }}
+                          </span>
+                          <button 
+                            v-if="authStore.canEdit"
+                            class="btn-edit-relay-in"
+                            @click.stop="startEditRelayIn(deviceData.device)"
+                            title="编辑名称"
+                          >
+                            <i class="fas fa-edit"></i>
+                          </button>
+                        </span>
+                        <div v-else class="relay-in-edit-input">
+                          <input
+                            type="text"
+                            v-model="editingRelayInName"
+                            @keyup.enter="saveRelayInName(deviceData.device.id)"
+                            @keyup.esc="cancelEditRelayIn"
+                            @focus="$event.target.select()"
+                            class="form-control form-control-sm"
+                            :maxlength="50"
+                            placeholder="继电器输入"
+                          />
+                          <button 
+                            class="btn btn-sm btn-success ms-1"
+                            @click="saveRelayInName(deviceData.device.id)"
+                            title="保存"
+                          >
+                            <i class="fas fa-check"></i>
+                          </button>
+                          <button 
+                            class="btn btn-sm btn-secondary ms-1"
+                            @click="cancelEditRelayIn"
+                            title="取消"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
+                      </div>
                       <div 
                         class="status-icon"
                         :class="getRelayInStatusValue(deviceData.sensors) > 0 ? 'status-on' : 'status-off'"
@@ -431,6 +471,8 @@ export default {
     const editingSensorName = ref('')
     const editingDeviceId = ref(null)
     const editingDeviceName = ref('')
+    const editingRelayInId = ref(null)
+    const editingRelayInName = ref('')
     const sendingRelayId = ref(null)
     const relayToggleLock = ref(new Set())
     const relayExpectedStates = ref(new Map())
@@ -612,6 +654,47 @@ export default {
       return sensor ? (sensor.value || 0) : 0
     }
     
+    // 获取继电器输入的显示名称（从 device.relay_in_display_name 读取）
+    const getRelayInDisplayName = (device) => {
+      if (!device) return '继电器输入'
+      return (device.relay_in_display_name && device.relay_in_display_name.trim()) 
+        ? device.relay_in_display_name.trim() 
+        : '继电器输入'
+    }
+    
+    // 开始编辑继电器输入名称
+    const startEditRelayIn = (device) => {
+      editingRelayInId.value = device.id
+      editingRelayInName.value = getRelayInDisplayName(device)
+    }
+    
+    // 保存继电器输入名称
+    const saveRelayInName = async (deviceId) => {
+      try {
+        const name = editingRelayInName.value.trim()
+        await axios.put(`/api/devices/${deviceId}/relay-in-display-name`, { 
+          relay_in_display_name: name || null 
+        })
+        
+        // 更新本地数据
+        const deviceData = devicesWithSensors.value.find(x => x.device.id === deviceId)
+        if (deviceData) {
+          deviceData.device.relay_in_display_name = name || null
+        }
+        
+        cancelEditRelayIn()
+      } catch (e) {
+        console.error('保存继电器输入名称失败:', e)
+        alert('保存失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+    
+    // 取消编辑继电器输入名称
+    const cancelEditRelayIn = () => {
+      editingRelayInId.value = null
+      editingRelayInName.value = ''
+    }
+    
     const getSensorDisplayName = (s) => {
       if (s.display_name && s.display_name.trim()) return s.display_name.trim()
       return typeof s === 'string' ? s : s.type
@@ -723,14 +806,16 @@ export default {
 
     return {
       devices, devicesWithSensors, filteredDevices, isLoading, searchKeyword, authStore,
-      editingSensorId, editingSensorName, editingDeviceId, editingDeviceName, sendingRelayId,
+      editingSensorId, editingSensorName, editingDeviceId, editingDeviceName, 
+      editingRelayInId, editingRelayInName, sendingRelayId,
       onlineDevices: computed(() => devicesWithSensors.value.filter(d => d.isOnline).length),
       offlineDevices: computed(() => devicesWithSensors.value.filter(d => !d.isOnline).length),
       formatSensorValue, getDeviceDisplayName, getSensorDisplayName, getSensorPercentage,
       getSensorStatusClass, formatShortDate, getPrioritySensors, getOtherSensors, hasPrioritySensors,
       handleSearch, clearSearch, startEditDevice, saveDeviceName, cancelEditDevice,
       startEditSensor, saveSensorName, cancelEditSensor, toggleRelay, isRelaySending, isRelayType,
-      getRelayInStatusValue, isReadOnlyRelayInput
+      getRelayInStatusValue, getRelayInDisplayName, startEditRelayIn, saveRelayInName, 
+      cancelEditRelayIn, isReadOnlyRelayInput
     }
   }
 }
@@ -1052,10 +1137,70 @@ export default {
   text-align: right;
 }
 
+.relay-in-status-indicator .relay-label-wrapper {
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 20px;
+}
+
 .relay-in-status-indicator .status-label {
   font-size: 0.7rem;
   color: #6c757d;
-  margin-bottom: 4px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.relay-in-name-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.btn-edit-relay-in {
+  background: transparent;
+  border: none;
+  color: #6c757d;
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0.3;
+  font-size: 0.7rem;
+  border-radius: 3px;
+  transition: opacity 0.2s;
+}
+
+.relay-in-status-indicator:hover .btn-edit-relay-in,
+.relay-in-name-wrapper:hover .btn-edit-relay-in {
+  opacity: 1;
+}
+
+.btn-edit-relay-in:hover {
+  color: #007bff;
+  background: rgba(0, 123, 255, 0.15);
+}
+
+.relay-in-edit-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.relay-in-edit-input input {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  width: 100px;
+  height: 24px;
+}
+
+.relay-in-edit-input .btn {
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  height: 24px;
+  line-height: 1;
 }
 
 .relay-in-status-indicator .status-icon {
