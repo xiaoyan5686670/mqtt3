@@ -22,6 +22,7 @@ class DeviceModel(Base):
     topic_config_id = Column(Integer, nullable=True)
     relay_on_payload = Column(String, nullable=True)  # 继电器开启的payload格式（设备级别）
     relay_off_payload = Column(String, nullable=True)  # 继电器关闭的payload格式（设备级别）
+    relay_in_display_name = Column(String, nullable=True)  # 继电器输入的自定义显示名称
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)  # 设备创建时间
     
     # 关系

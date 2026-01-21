@@ -105,6 +105,10 @@ class DeviceDisplayNameUpdate(BaseModel):
     display_name: Optional[str] = None
 
 
+class RelayInDisplayNameUpdate(BaseModel):
+    relay_in_display_name: Optional[str] = None
+
+
 @router.put("/{device_id}/display-name", response_model=Device)
 def update_device_display_name(
     device_id: int,
@@ -119,6 +123,24 @@ def update_device_display_name(
     
     # 只更新 display_name 字段，不修改 name 字段
     device_update = DeviceUpdate(display_name=update_data.display_name)
+    updated_device = device_service_module.update_device(db, device_id, device_update)
+    return updated_device
+
+
+@router.put("/{device_id}/relay-in-display-name", response_model=Device)
+def update_relay_in_display_name(
+    device_id: int,
+    update_data: RelayInDisplayNameUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """更新设备的继电器输入显示名称（仅管理员）"""
+    device = device_service_module.get_device(db, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    # 更新 relay_in_display_name 字段
+    device_update = DeviceUpdate(relay_in_display_name=update_data.relay_in_display_name)
     updated_device = device_service_module.update_device(db, device_id, device_update)
     return updated_device
 
