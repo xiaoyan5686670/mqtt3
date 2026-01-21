@@ -195,8 +195,26 @@
                       </span>
                     </small>
                   </div>
-                  <div class="device-icon">
-                    <i class="fas fa-server fa-2x text-primary"></i>
+                  <div class="device-icon-area">
+                    <!-- 继电器输入状态指示器（只读，显示外部输入状态） -->
+                    <div 
+                      class="relay-in-status-indicator mb-2"
+                      :title="'继电器输入状态（只读）: ' + (getRelayInStatusValue(deviceData.sensors) > 0 ? 'ON（有输入）' : 'OFF（无输入）')"
+                    >
+                      <div class="status-label">继电器输入</div>
+                      <div 
+                        class="status-icon"
+                        :class="getRelayInStatusValue(deviceData.sensors) > 0 ? 'status-on' : 'status-off'"
+                      >
+                        <i class="fas fa-plug"></i>
+                        <span class="status-text">
+                          {{ getRelayInStatusValue(deviceData.sensors) > 0 ? 'ON' : 'OFF' }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="device-icon">
+                      <i class="fas fa-server fa-2x text-primary"></i>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -338,9 +356,9 @@
                         >
                           {{ sensor.value > 0 ? 'ON' : 'OFF' }}
                         </span>
-                        <!-- 继电器控制按钮 -->
+                        <!-- 继电器控制按钮（排除只读的继电器输入） -->
                         <button 
-                          v-if="isRelayType(sensor.type) && authStore.canEdit"
+                          v-if="isRelayType(sensor.type) && !isReadOnlyRelayInput(sensor.type) && authStore.canEdit"
                           class="btn btn-sm relay-toggle-btn"
                           :class="sensor.value > 0 ? 'btn-warning' : 'btn-success'"
                           @click.stop.prevent="toggleRelay(deviceData.device, sensor)"
@@ -574,9 +592,25 @@ export default {
       })
     }
 
-    const getOtherSensors = (sensors) => sensors.filter(s => !isPrioritySensor(s.type))
+    // 判断是否为只读的继电器输入类型（不应该在列表中显示控制按钮）
+    const isReadOnlyRelayInput = (type) => {
+      if (!type) return false
+      const t = type.toLowerCase()
+      return t === 'realy_in_status' || t === 'relay_in_status'
+    }
+    
+    const getOtherSensors = (sensors) => sensors.filter(s => !isPrioritySensor(s.type) && !isReadOnlyRelayInput(s.type))
     const hasPrioritySensors = (sensors) => sensors && sensors.some(s => isPrioritySensor(s.type))
     const getDeviceDisplayName = (d) => (d.display_name && d.display_name.trim()) ? d.display_name.trim() : d.name
+    
+    // 获取 realy_in_status 传感器的值（始终返回数字，默认为0）
+    // 只取 realy_in_status（实时上报，时效性高），不取 relay_in_status（10秒上报，时效性低）
+    const getRelayInStatusValue = (sensors) => {
+      if (!sensors) return 0
+      // 只查找 realy_in_status（实时数据）
+      const sensor = sensors.find(s => s.type === 'realy_in_status')
+      return sensor ? (sensor.value || 0) : 0
+    }
     
     const getSensorDisplayName = (s) => {
       if (s.display_name && s.display_name.trim()) return s.display_name.trim()
@@ -683,7 +717,7 @@ export default {
     onMounted(async () => {
       await fetchAllTopicConfigs()
       await fetchDevicesWithSensors()
-      refreshInterval = setInterval(fetchDevicesWithSensors, 5000)
+      refreshInterval = setInterval(fetchDevicesWithSensors, 2000)
     })
     onUnmounted(() => { if (refreshInterval) clearInterval(refreshInterval) })
 
@@ -695,7 +729,8 @@ export default {
       formatSensorValue, getDeviceDisplayName, getSensorDisplayName, getSensorPercentage,
       getSensorStatusClass, formatShortDate, getPrioritySensors, getOtherSensors, hasPrioritySensors,
       handleSearch, clearSearch, startEditDevice, saveDeviceName, cancelEditDevice,
-      startEditSensor, saveSensorName, cancelEditSensor, toggleRelay, isRelaySending, isRelayType
+      startEditSensor, saveSensorName, cancelEditSensor, toggleRelay, isRelaySending, isRelayType,
+      getRelayInStatusValue, isReadOnlyRelayInput
     }
   }
 }
@@ -1003,6 +1038,49 @@ export default {
 .sensor-label-text[title],
 .device-location[title] {
   cursor: default;
+}
+
+/* 继电器输入状态指示器样式（只读，显示外部输入状态） */
+.device-icon-area {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.relay-in-status-indicator {
+  text-align: right;
+}
+
+.relay-in-status-indicator .status-label {
+  font-size: 0.7rem;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.relay-in-status-indicator .status-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.relay-in-status-indicator .status-icon.status-on {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.relay-in-status-indicator .status-icon.status-off {
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  color: white;
+}
+
+.relay-in-status-indicator .status-text {
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 /* 改进编辑输入框的响应式 */

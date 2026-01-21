@@ -25,6 +25,7 @@ def get_users(
 
 
 @router.get("/{user_id}", response_model=User)
+@router.get("/{user_id}/", response_model=User)
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -65,6 +66,7 @@ def create_user(
 
 
 @router.put("/{user_id}", response_model=User)
+@router.put("/{user_id}/", response_model=User)
 def update_user(
     user_id: int,
     user_update: UserUpdate,
@@ -79,6 +81,7 @@ def update_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}/", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),

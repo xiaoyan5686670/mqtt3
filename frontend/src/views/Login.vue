@@ -62,6 +62,22 @@
               </div>
             </div>
 
+            <div class="form-group remember-group">
+              <label class="remember-label">
+                <input
+                  type="checkbox"
+                  class="remember-checkbox"
+                  v-model="rememberPassword"
+                  :disabled="loading"
+                />
+                <span class="checkbox-custom"></span>
+                <span class="remember-text">
+                  <i class="fas fa-key remember-icon"></i>
+                  记住密码
+                </span>
+              </label>
+            </div>
+
             <div v-if="error" class="error-message">
               <i class="fas fa-exclamation-circle me-2"></i>
               {{ error }}
@@ -96,7 +112,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -105,16 +121,44 @@ export default {
   setup() {
     const username = ref('')
     const password = ref('')
+    const rememberPassword = ref(false)
     const error = ref('')
     const loading = ref(false)
     const authStore = useAuthStore()
     const router = useRouter()
+
+    // 组件挂载时，尝试从 localStorage 加载保存的账号密码
+    onMounted(() => {
+      const savedUsername = localStorage.getItem('rememberedUsername')
+      const savedPassword = localStorage.getItem('rememberedPassword')
+      const wasRemembered = localStorage.getItem('rememberPassword')
+      
+      if (wasRemembered === 'true' && savedUsername && savedPassword) {
+        username.value = savedUsername
+        password.value = savedPassword
+        rememberPassword.value = true
+      }
+    })
 
     const handleLogin = async () => {
       error.value = ''
       loading.value = true
       try {
         await authStore.login(username.value, password.value)
+        
+        // 处理记住密码功能
+        if (rememberPassword.value) {
+          // 保存用户名和密码到 localStorage
+          localStorage.setItem('rememberedUsername', username.value)
+          localStorage.setItem('rememberedPassword', password.value)
+          localStorage.setItem('rememberPassword', 'true')
+        } else {
+          // 清除保存的用户名和密码
+          localStorage.removeItem('rememberedUsername')
+          localStorage.removeItem('rememberedPassword')
+          localStorage.removeItem('rememberPassword')
+        }
+        
         // 获取用户信息
         await authStore.getCurrentUser()
         router.push('/dashboard')
@@ -128,6 +172,7 @@ export default {
     return {
       username,
       password,
+      rememberPassword,
       error,
       loading,
       handleLogin
@@ -357,6 +402,79 @@ export default {
 
 .form-input::placeholder {
   color: #adb5bd;
+}
+
+/* 记住密码选项 */
+.remember-group {
+  margin-bottom: 20px;
+}
+
+.remember-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.remember-checkbox {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkbox-custom {
+  position: relative;
+  height: 20px;
+  width: 20px;
+  background-color: #fff;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.remember-checkbox:checked ~ .checkbox-custom {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+}
+
+.remember-checkbox:checked ~ .checkbox-custom::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.remember-checkbox:focus ~ .checkbox-custom {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #667eea;
+}
+
+.remember-label:hover .checkbox-custom {
+  border-color: #667eea;
+}
+
+.remember-text {
+  margin-left: 10px;
+  font-size: 0.9rem;
+  color: #495057;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.remember-icon {
+  margin-right: 6px;
+  color: #667eea;
+  font-size: 0.85rem;
 }
 
 /* 错误提示 */

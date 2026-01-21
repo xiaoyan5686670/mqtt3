@@ -280,8 +280,8 @@ class MQTTService:
                                 # 如果是字符串类型的继电器/开关状态，转换为数字
                                 if isinstance(raw_value, str):
                                     value_lower = raw_value.lower().strip()
-                                    if key_lower in ['relay_status', 'relay', 'switch', 'switch_status'] or \
-                                       'relay' in key_lower or 'switch' in key_lower:
+                                    if key_lower in ['relay_status', 'relay', 'switch', 'switch_status', 'realy_in_status', 'relay_in_status'] or \
+                                       'relay' in key_lower or 'switch' in key_lower or 'realy' in key_lower:
                                         # 转换常见的开关状态字符串为数字
                                         if value_lower in ['on', 'open', 'true', '1', 'active', 'enabled']:
                                             processed_value = 1
@@ -313,12 +313,35 @@ class MQTTService:
                 
                 # 默认 JSON 解析逻辑（如果没有配置或解析失败）
                 for key, value in data.items():
-                    if isinstance(value, (int, float)):
-                        sensor_type = key
-                        unit = ''
-                        display_name = None
-                        
-                        key_lower = key.lower()
+                    sensor_type = key
+                    unit = ''
+                    display_name = None
+                    processed_value = value
+                    
+                    key_lower = key.lower()
+                    
+                    # 处理字符串类型的继电器/开关状态
+                    if isinstance(value, str):
+                        value_lower = value.lower().strip()
+                        if key_lower in ['relay_status', 'relay', 'switch', 'switch_status', 'realy_in_status', 'relay_in_status'] or \
+                           'relay' in key_lower or 'switch' in key_lower or 'realy' in key_lower:
+                            if value_lower in ['on', 'open', 'true', '1', 'active', 'enabled']:
+                                processed_value = 1
+                            elif value_lower in ['off', 'close', 'false', '0', 'inactive', 'disabled']:
+                                processed_value = 0
+                            else:
+                                logger.warning(f"无法识别继电器状态值: {value}，跳过字段 {key}")
+                                continue
+                            
+                            # 支持两种拼写：realy_in_status（错误拼写）和 relay_in_status（正确拼写）
+                            if key_lower in ['realy_in_status', 'relay_in_status']:
+                                display_name = "继电器输入"
+                            else:
+                                display_name = "继电器"
+                        else:
+                            # 非继电器类型的字符串，跳过
+                            continue
+                    elif isinstance(value, (int, float)):
                         if 'temp' in key_lower:
                             unit = '°C'
                             # 尝试生成一个友好的显示名称，例如 air_temperature_1 -> 温度 1
@@ -330,10 +353,17 @@ class MQTTService:
                             num_match = re.search(r'\d+', key)
                             num = num_match.group() if num_match else ""
                             display_name = f"湿度{num}" if num else "湿度"
-                        elif 'relay' in key_lower:
-                            display_name = "继电器"
-                        
-                        self.save_sensor_data(device_id, sensor_type, value, unit, display_name)
+                        elif 'relay' in key_lower or 'realy' in key_lower:
+                            # 支持两种拼写：realy_in_status（错误拼写）和 relay_in_status（正确拼写）
+                            if key_lower in ['realy_in_status', 'relay_in_status']:
+                                display_name = "继电器输入"
+                            else:
+                                display_name = "继电器"
+                    else:
+                        # 其他类型，跳过
+                        continue
+                    
+                    self.save_sensor_data(device_id, sensor_type, processed_value, unit, display_name)
                 return
         except json.JSONDecodeError:
             pass # 不是 JSON 格式，继续使用正则解析
