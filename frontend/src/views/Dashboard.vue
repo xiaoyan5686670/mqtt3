@@ -370,72 +370,141 @@
               
               <!-- 卡片主体：关键数据指标（温度、湿度优先） -->
               <div class="card-body py-2 px-3">
-                <!-- 温度和湿度 - 重要指标，突出显示 -->
-                <div v-if="hasPrioritySensors(deviceData.sensors)" class="priority-metrics mb-2">
+                <!-- 重要指标：美观的 Mini 分组 (Air & Comp) -->
+                <div v-if="hasGroupsOrPriority(deviceData.sensors)" class="priority-metrics mb-2">
                   <div class="row g-2">
+                    
+                    <!-- 遍历所有分组 -->
                     <div 
-                      v-for="sensor in getPrioritySensors(deviceData.sensors)" 
+                      v-for="group in getSensorGroups(deviceData.sensors).groups" 
+                      :key="`${group.groupType}-${group.number}`"
+                      class="col-12"
+                    >
+                      <!-- Air Group: 环境组 (左右并排) -->
+                      <div v-if="group.groupType === 'air'" class="mini-group-card status-default">
+                        <div class="mini-group-header">
+                          <span class="mini-title"><i class="fas fa-layer-group me-1"></i>环境组 {{ group.number }}</span>
+                        </div>
+                        <div class="mini-body">
+                          <!-- 温度 -->
+                          <div v-if="group.temp" class="mini-sensor-item">
+                            <div class="mini-label-container">
+                              <template v-if="editingSensorId !== `${deviceData.device.id}-${group.temp.type}`">
+                                <div class="mini-label text-truncate" :title="getSensorDisplayName(group.temp)">
+                                  <i class="fas fa-thermometer-half me-1"></i>{{ getSensorDisplayName(group.temp) }}
+                                </div>
+                                <button v-if="authStore.canEdit" class="mini-edit-btn" @click.stop="startEditSensor(deviceData.device.id, group.temp)" title="编辑"><i class="fas fa-pen"></i></button>
+                              </template>
+                              <div v-else class="mini-edit-box" @click.stop>
+                                <input type="text" v-model="editingSensorName" @keyup.enter="saveSensorName(deviceData.device.id, group.temp)" @keyup.esc="cancelEditSensor" class="form-control form-control-sm mini-input" />
+                                <button class="btn-mini-action text-success" @click="saveSensorName(deviceData.device.id, group.temp)"><i class="fas fa-check"></i></button>
+                                <button class="btn-mini-action text-secondary" @click="cancelEditSensor"><i class="fas fa-times"></i></button>
+                              </div>
+                            </div>
+                            <div class="mini-value text-danger" :title="getSensorDisplayName(group.temp)">
+                              {{ formatSensorValue(group.temp.value) }}<span class="unit">{{ group.temp.unit || '℃' }}</span>
+                            </div>
+                          </div>
+                          <div class="divider-vertical"></div>
+                          <!-- 湿度 -->
+                          <div v-if="group.hum" class="mini-sensor-item">
+                            <div class="mini-label-container">
+                              <template v-if="editingSensorId !== `${deviceData.device.id}-${group.hum.type}`">
+                                <div class="mini-label text-truncate" :title="getSensorDisplayName(group.hum)">
+                                  <i class="fas fa-tint me-1"></i>{{ getSensorDisplayName(group.hum) }}
+                                </div>
+                                <button v-if="authStore.canEdit" class="mini-edit-btn" @click.stop="startEditSensor(deviceData.device.id, group.hum)" title="编辑"><i class="fas fa-pen"></i></button>
+                              </template>
+                              <div v-else class="mini-edit-box" @click.stop>
+                                <input type="text" v-model="editingSensorName" @keyup.enter="saveSensorName(deviceData.device.id, group.hum)" @keyup.esc="cancelEditSensor" class="form-control form-control-sm mini-input" />
+                                <button class="btn-mini-action text-success" @click="saveSensorName(deviceData.device.id, group.hum)"><i class="fas fa-check"></i></button>
+                                <button class="btn-mini-action text-secondary" @click="cancelEditSensor"><i class="fas fa-times"></i></button>
+                              </div>
+                            </div>
+                            <div class="mini-value text-primary" :title="getSensorDisplayName(group.hum)">
+                              {{ formatSensorValue(group.hum.value) }}<span class="unit">{{ group.hum.unit || '%' }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Comp Group: 流程组 (入口 -> 出口) -->
+                      <div v-else-if="group.groupType === 'comp'" class="mini-group-card" :class="group.out && group.in && group.out.value >= group.in.value ? 'status-normal' : 'status-abnormal'">
+                         <div class="mini-group-header">
+                          <span class="mini-title"><i class="fas fa-fan me-1"></i>流程组 {{ group.number }}</span>
+                        </div>
+                        <div class="mini-body">
+                          <!-- 入口 -->
+                          <div v-if="group.in" class="mini-sensor-item">
+                            <div class="mini-label-container">
+                              <template v-if="editingSensorId !== `${deviceData.device.id}-${group.in.type}`">
+                                <div class="mini-label text-truncate" :title="getSensorDisplayName(group.in)">
+                                  {{ getSensorDisplayName(group.in) }}
+                                </div>
+                                <button v-if="authStore.canEdit" class="mini-edit-btn" @click.stop="startEditSensor(deviceData.device.id, group.in)" title="编辑"><i class="fas fa-pen"></i></button>
+                              </template>
+                              <div v-else class="mini-edit-box" @click.stop>
+                                <input type="text" v-model="editingSensorName" @keyup.enter="saveSensorName(deviceData.device.id, group.in)" @keyup.esc="cancelEditSensor" class="form-control form-control-sm mini-input" />
+                                <button class="btn-mini-action text-success" @click="saveSensorName(deviceData.device.id, group.in)"><i class="fas fa-check"></i></button>
+                                <button class="btn-mini-action text-secondary" @click="cancelEditSensor"><i class="fas fa-times"></i></button>
+                              </div>
+                            </div>
+                            <div class="mini-value" :title="getSensorDisplayName(group.in)">
+                              {{ formatSensorValue(group.in.value) }}<span class="unit">{{ group.in.unit || '℃' }}</span>
+                            </div>
+                          </div>
+                          
+                          <!-- 箭头 -->
+                          <i class="fas fa-arrow-right flow-arrow"></i>
+
+                          <!-- 出口 -->
+                          <div v-if="group.out" class="mini-sensor-item">
+                            <div class="mini-label-container">
+                              <template v-if="editingSensorId !== `${deviceData.device.id}-${group.out.type}`">
+                                <div class="mini-label text-truncate" :title="getSensorDisplayName(group.out)">
+                                  {{ getSensorDisplayName(group.out) }}
+                                </div>
+                                <button v-if="authStore.canEdit" class="mini-edit-btn" @click.stop="startEditSensor(deviceData.device.id, group.out)" title="编辑"><i class="fas fa-pen"></i></button>
+                              </template>
+                              <div v-else class="mini-edit-box" @click.stop>
+                                <input type="text" v-model="editingSensorName" @keyup.enter="saveSensorName(deviceData.device.id, group.out)" @keyup.esc="cancelEditSensor" class="form-control form-control-sm mini-input" />
+                                <button class="btn-mini-action text-success" @click="saveSensorName(deviceData.device.id, group.out)"><i class="fas fa-check"></i></button>
+                                <button class="btn-mini-action text-secondary" @click="cancelEditSensor"><i class="fas fa-times"></i></button>
+                              </div>
+                            </div>
+                            <div class="mini-value" :class="group.out && group.in && group.out.value < group.in.value ? 'text-danger' : 'text-success'" :title="getSensorDisplayName(group.out)">
+                              {{ formatSensorValue(group.out.value) }}<span class="unit">{{ group.out.unit || '℃' }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 未分组的传感器 (保持 Mini 风格) -->
+                    <div 
+                      v-for="sensor in getSensorGroups(deviceData.sensors).ungrouped" 
                       :key="sensor.id"
                       class="col-6"
                     >
                       <div class="metric-card">
                         <div class="metric-label">
-                          <span v-if="editingSensorId !== `${deviceData.device.id}-${sensor.type}`" class="sensor-name-wrapper">
-                            <span 
-                              class="sensor-label-text" 
-                              :title="getSensorDisplayName(sensor)"
-                            >
-                              {{ getSensorDisplayName(sensor) }}
-                            </span>
-                            <button 
-                              v-if="authStore.canEdit"
-                              class="btn-edit-sensor"
-                              @click.stop="startEditSensor(deviceData.device.id, sensor)"
-                              title="编辑名称"
-                            >
-                              <i class="fas fa-edit"></i>
-                            </button>
+                          <!-- 这里的结构需要保持与原有逻辑兼容，或者也改造成 mini 风格，但为了风险控制，暂时保持 原有结构 但优化样式 -->
+                          <span class="text-truncate" :title="getSensorDisplayName(sensor)">
+                             {{ getSensorDisplayName(sensor) }}
                           </span>
-                          <div v-else class="sensor-edit-input">
-                            <input
-                              type="text"
-                              v-model="editingSensorName"
-                              @keyup.enter="saveSensorName(deviceData.device.id, sensor)"
-                              @keyup.esc="cancelEditSensor"
-                              @focus="$event.target.select()"
-                              class="form-control form-control-sm"
-                              :maxlength="50"
-                              :data-sensor-key="`${deviceData.device.id}-${sensor.type}`"
-                            />
-                            <button 
-                              class="btn btn-sm btn-success ms-1"
-                              @click="saveSensorName(deviceData.device.id, sensor)"
-                              title="保存"
-                            >
-                              <i class="fas fa-check"></i>
-                            </button>
-                            <button 
-                              class="btn btn-sm btn-secondary ms-1"
-                              @click="cancelEditSensor"
-                              title="取消"
-                            >
-                              <i class="fas fa-times"></i>
-                            </button>
-                          </div>
+                           <button v-if="authStore.canEdit" class="mini-edit-btn float-end" @click.stop="startEditSensor(deviceData.device.id, sensor)"><i class="fas fa-pen"></i></button>
                         </div>
                         <div class="metric-value">
                           {{ formatSensorValue(sensor.value) }}
                           <span class="metric-unit">{{ sensor.unit || '' }}</span>
                         </div>
+                         <!-- 简易进度条 -->
                         <div class="metric-bar">
-                          <div 
-                            class="metric-progress" 
-                            :class="getSensorStatusClass(sensor)"
-                            :style="{ width: getSensorPercentage(sensor) + '%' }"
-                          ></div>
+                           <div class="metric-progress" :class="getSensorStatusClass(sensor)" :style="{ width: getSensorPercentage(sensor) + '%' }"></div>
                         </div>
                       </div>
                     </div>
+
                   </div>
                 </div>
                 
@@ -743,6 +812,90 @@ export default {
       })
     }
 
+    // 提取传感器类型中的编号
+    // air_temperature_1 -> { type: 'air', num: 1 }
+    // comp1_in_temperature_F -> { type: 'comp', num: 1 }
+    const parseSensorType = (type) => {
+      if (!type) return null
+      
+      // 匹配环境传感器 (air_temperature_1)
+      const airMatch = type.match(/air_.*_([0-9]+)$/)
+      if (airMatch) return { groupType: 'air', num: airMatch[1] }
+
+      // 匹配压缩机传感器 (comp1_in_...)
+      const compMatch = type.match(/comp([0-9]+)_.*_temperature/)
+      if (compMatch) return { groupType: 'comp', num: compMatch[1] }
+      
+      return null
+    }
+
+    // 将温湿度传感器按编号分组
+    const getSensorGroups = (sensors) => {
+      const prioritySensors = getPrioritySensors(sensors)
+      const groupMap = new Map() // Key: "type-num"
+      const ungrouped = []
+
+      // 所有的传感器过一遍，尝试分组
+      sensors.forEach(sensor => { // 注意：这里使用 sensors 而不是 prioritySensors，以免漏掉 comp 类型的（如果不包含在 priority 中）
+        if (isReadOnlyRelayInput(sensor.type)) return // 跳过只读继电器
+
+        const parsed = parseSensorType(sensor.type)
+        const type = sensor.type.toLowerCase()
+         // 只处理我们关心的几种类型：air temp/hum, comp in/out
+        const isTarget = isPrioritySensor(sensor.type) || type.includes('comp')
+
+        if (parsed && isTarget) {
+          const key = `${parsed.groupType}-${parsed.num}`
+          if (!groupMap.has(key)) {
+            groupMap.set(key, { 
+              groupType: parsed.groupType, 
+              number: parsed.num, 
+              // air props
+              temp: null, 
+              hum: null,
+              // comp props
+              in: null,
+              out: null
+            })
+          }
+          
+          const group = groupMap.get(key)
+          
+          if (parsed.groupType === 'air') {
+             if (type.includes('temp')) group.temp = sensor
+             else if (type.includes('hum')) group.hum = sensor
+          } else if (parsed.groupType === 'comp') {
+             if (type.includes('in')) group.in = sensor
+             else if (type.includes('out')) group.out = sensor
+          }
+        } else if (isTarget) {
+          // 是目标类型（如Priority）但没解析出编号，或者是单个的
+          ungrouped.push(sensor)
+        }
+      })
+      
+      // 过滤掉不完整的组（可选，这里我们全部显示，单腿也显示）
+      const groupArray = Array.from(groupMap.values()).sort((a, b) => {
+        if (a.groupType !== b.groupType) return a.groupType.localeCompare(b.groupType)
+        return parseInt(a.number) - parseInt(b.number)
+      })
+
+      // 还需要把那些根本不在 priority 和 comp 规则里的传感器找出来（getOtherSensors 负责）
+      // 这里只需要返回我们不仅处理了 priority，还处理了 comp 的结果
+      
+      // 注意：上面的逻辑由于使用了 sensors 全集，可能会把 priorityLogic 里的也包含进去。
+      // 为了不破坏原有逻辑，我们还是只处理 Priority 里的 + Comp 里的。
+      // 既然用户需求是要把这些分组，那展示的时候优先展示分组。
+      
+      return { groups: groupArray, ungrouped }
+    }
+    
+    // 覆盖原有的 hasPrioritySensors 逻辑，如果分组里有东西也通过
+    const hasGroupsOrPriority = (sensors) => {
+        const { groups, ungrouped } = getSensorGroups(sensors)
+        return groups.length > 0 || ungrouped.length > 0
+    }
+
     // 判断是否为只读的继电器输入类型（不应该在列表中显示控制按钮）
     const isReadOnlyRelayInput = (type) => {
       if (!type) return false
@@ -964,7 +1117,7 @@ export default {
       onlineDevices: computed(() => devicesWithSensors.value.filter(d => d.isOnline).length),
       offlineDevices: computed(() => devicesWithSensors.value.filter(d => !d.isOnline).length),
       formatSensorValue, getDeviceDisplayName, getSensorDisplayName, getSensorPercentage,
-      getSensorStatusClass, formatShortDate, getPrioritySensors, getOtherSensors, hasPrioritySensors,
+      getSensorStatusClass, formatShortDate, getPrioritySensors, getSensorGroups, hasGroupsOrPriority, getOtherSensors, hasPrioritySensors,
       handleSearch, clearSearch, startEditDevice, saveDeviceName, cancelEditDevice,
       startEditSensor, saveSensorName, cancelEditSensor, toggleRelay, isRelaySending, isRelayType,
       getRelayInStatusValue, getRelayInDisplayName, startEditRelayIn, saveRelayInName, 
@@ -1090,8 +1243,146 @@ export default {
   display: inline-block;
   vertical-align: middle;
 }
-.priority-metrics { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-radius: 6px; padding: 8px; border: 1px solid #e3f2fd; }
+.priority-metrics { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-radius: 6px; padding: 4px; border: 1px solid #e3f2fd; }
 .metric-card { background: white; border-radius: 4px; padding: 8px; border-left: 3px solid #2196F3; }
+
+/* 美观的 Mini 分组卡片 (复刻 Compressor Group 风格) */
+.mini-group-card {
+  background: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb; /* 默认灰色边框 */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-group-card:hover {
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  transform: translateY(-1px);
+}
+
+/* 状态边框色 */
+.mini-group-card.status-normal { border-left: 3px solid #10b981; }
+.mini-group-card.status-abnormal { border-left: 3px solid #ef4444; }
+.mini-group-card.status-default { border-left: 3px solid #3b82f6; } /* 蓝色默认 */
+
+.mini-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 4px;
+}
+
+.mini-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mini-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+/* 传感器项样式 */
+.mini-sensor-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative; /* 用于放置编辑按钮 */
+}
+
+/* 编辑按钮 (显式但小巧) */
+.mini-edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 0.7rem;
+  padding: 0 4px;
+  margin-left: 2px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  vertical-align: middle;
+}
+.mini-edit-btn:hover { opacity: 1; color: #3b82f6; }
+
+.mini-label-container {
+  min-height: 18px; /* 保证高度防止抖动 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.mini-label {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  max-width: 80px; /* 限制标签最大宽度 */
+}
+
+/* Mini 编辑框样式 */
+.mini-edit-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.mini-input {
+  font-size: 0.7rem;
+  padding: 0 4px;
+  height: 20px;
+  width: 70px; /* 小巧宽度 */
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.btn-mini-action {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.75rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.btn-mini-action:hover { opacity: 0.8; }
+
+.mini-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #374151;
+  line-height: 1.2;
+}
+.mini-value .unit { font-size: 0.75rem; font-weight: 400; color: #9ca3af; margin-left: 1px; }
+
+/* 状态色文字 */
+.text-success { color: #10b981 !important; }
+.text-danger { color: #ef4444 !important; }
+
+/* 流程箭头 */
+.flow-arrow {
+  color: #d1d5db;
+  font-size: 0.9rem;
+  margin: 0 8px;
+}
 .metric-label { 
   font-size: 0.75rem; 
   color: #6c757d; 
