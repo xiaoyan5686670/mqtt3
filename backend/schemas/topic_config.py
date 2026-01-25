@@ -31,6 +31,7 @@ class TopicConfig(TopicConfigBase):
     id: int
     is_active: bool = False
     mqtt_config_id: Optional[int] = None
+    user_id: Optional[int] = None  # 所属用户ID，None表示系统级配置
     json_parse_config: Optional[str] = None
     relay_on_payload: Optional[str] = None
     relay_off_payload: Optional[str] = None

@@ -11,19 +11,19 @@
             <li class="nav-item">
               <router-link class="nav-link" to="/dashboard">首页</router-link>
             </li>
-            <li class="nav-item" v-if="authStore.isAdmin">
+            <li class="nav-item">
               <router-link class="nav-link" to="/devices">设备管理</router-link>
             </li>
-            <li class="nav-item" v-if="authStore.isAdmin">
+            <li class="nav-item">
               <router-link class="nav-link" to="/realtime-data">实时数据</router-link>
             </li>
-            <li class="nav-item" v-if="authStore.isAdmin">
+            <li class="nav-item">
               <router-link class="nav-link" to="/mqtt-config">MQTT配置管理</router-link>
             </li>
             <li class="nav-item" v-if="authStore.isAdmin">
               <router-link class="nav-link" to="/emqx-api-config">EMQX API配置</router-link>
             </li>
-            <li class="nav-item" v-if="authStore.isAdmin">
+            <li class="nav-item">
               <router-link class="nav-link" to="/topic-config">消费&生产主题配置</router-link>
             </li>
             <li class="nav-item" v-if="authStore.isAdmin">

@@ -33,6 +33,7 @@ class MQTTConfig(MQTTConfigBase):
     api_port: Optional[int] = 18083
     api_key: Optional[str] = None
     api_secret: Optional[str] = None
+    user_id: Optional[int] = None  # 所属用户ID，None表示系统级配置
 
     class Config:
         from_attributes = True

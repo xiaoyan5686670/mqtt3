@@ -18,9 +18,20 @@ def get_device_by_name(db: Session, name: str) -> Optional[DeviceModel]:
     return db.query(DeviceModel).filter(DeviceModel.name == name).first()
 
 
-def get_devices(db: Session, skip: int = 0, limit: int = 100) -> List[DeviceModel]:
-    """获取设备列表"""
-    devices = db.query(DeviceModel).offset(skip).limit(limit).all()
+def get_devices(db: Session, skip: int = 0, limit: int = 100, user_id: Optional[int] = None) -> List[DeviceModel]:
+    """获取设备列表
+    
+    Args:
+        skip: 跳过数量
+        limit: 限制数量
+        user_id: 可选，按用户ID筛选
+    """
+    query = db.query(DeviceModel)
+    
+    if user_id is not None:
+        query = query.filter(DeviceModel.user_id == user_id)
+        
+    devices = query.offset(skip).limit(limit).all()
     # 为每个设备填充 publish_topic
     for device in devices:
         device.publish_topic = get_device_publish_topic(db, device)
@@ -58,9 +69,13 @@ def get_device_publish_topic(db: Session, device: DeviceModel) -> str:
     return f"pc/{device.id}"
 
 
-def create_device(db: Session, device: DeviceCreate) -> DeviceModel:
+def create_device(db: Session, device: DeviceCreate, user_id: Optional[int] = None) -> DeviceModel:
     """创建设备"""
-    db_device = DeviceModel(**device.model_dump())
+    device_data = device.model_dump()
+    if user_id:
+        device_data["user_id"] = user_id
+        
+    db_device = DeviceModel(**device_data)
     db.add(db_device)
     db.commit()
     db.refresh(db_device)

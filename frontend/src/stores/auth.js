@@ -17,7 +17,8 @@ export const useAuthStore = defineStore('auth', {
       return state.user?.is_admin === true
     },
     canEdit: (state) => {
-      return state.user?.is_admin === true
+      // 只要登录了就可以编辑（API会控制只能看到自己的设备，或者管理员能看到所有）
+      return !!state.user
     }
   },
 

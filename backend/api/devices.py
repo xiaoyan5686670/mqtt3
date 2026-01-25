@@ -29,7 +29,12 @@ def get_devices(
     current_user: User = Depends(get_current_active_user)
 ):
     """获取设备列表（需要认证）"""
-    devices = device_service_module.get_devices(db, skip=skip, limit=limit)
+    # 如果是管理员，获取所有设备；否则只获取属于该用户的设备
+    user_id = None
+    if not current_user.is_admin:
+        user_id = current_user.id
+        
+    devices = device_service_module.get_devices(db, skip=skip, limit=limit, user_id=user_id)
     return devices
 
 
@@ -43,6 +48,11 @@ def get_device(
     device = device_service_module.get_device(db, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+    
+    # 权限检查：如果是管理员或设备属于当前用户，则允许访问
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this device")
+        
     return device
 
 
@@ -56,6 +66,10 @@ def get_device_publish_topic_api(
     device = device_service_module.get_device(db, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+        
+    # 权限检查
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     return {
         "device_id": device_id,
@@ -68,10 +82,12 @@ def get_device_publish_topic_api(
 def create_device(
     device: DeviceCreate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_active_user)
 ):
-    """创建设备（仅管理员）"""
-    return device_service_module.create_device(db, device)
+    """创建设备"""
+    # 任何人都可以创建设备，创建者自动成为拥有者
+    # 如果是管理员，也可以创建（拥有者为管理员自己）
+    return device_service_module.create_device(db, device, user_id=current_user.id)
 
 
 @router.put("/{device_id}", response_model=Device)
@@ -79,12 +95,18 @@ def update_device(
     device_id: int, 
     device_update: DeviceUpdate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_active_user)
 ):
-    """更新设备（仅管理员）"""
-    device = device_service_module.update_device(db, device_id, device_update)
+    """更新设备"""
+    device = device_service_module.get_device(db, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+        
+    # 权限检查
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this device")
+        
+    device = device_service_module.update_device(db, device_id, device_update)
     return device
 
 
@@ -92,9 +114,17 @@ def update_device(
 def delete_device(
     device_id: int, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_active_user)
 ):
-    """删除设备（仅管理员）"""
+    """删除设备"""
+    device = device_service_module.get_device(db, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    # 权限检查
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this device")
+        
     success = device_service_module.delete_device(db, device_id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -114,12 +144,16 @@ def update_device_display_name(
     device_id: int,
     update_data: DeviceDisplayNameUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_active_user)
 ):
-    """更新设备的展示名称（仅管理员）"""
+    """更新设备的展示名称"""
     device = device_service_module.get_device(db, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+        
+    # 权限检查
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     # 只更新 display_name 字段，不修改 name 字段
     device_update = DeviceUpdate(display_name=update_data.display_name)
@@ -132,12 +166,16 @@ def update_relay_in_display_name(
     device_id: int,
     update_data: RelayInDisplayNameUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_active_user)
 ):
-    """更新设备的继电器输入显示名称（仅管理员）"""
+    """更新设备的继电器输入显示名称"""
     device = device_service_module.get_device(db, device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+        
+    # 权限检查
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     # 更新 relay_in_display_name 字段
     device_update = DeviceUpdate(relay_in_display_name=update_data.relay_in_display_name)
@@ -152,5 +190,13 @@ def get_latest_device_sensors(
     current_user: User = Depends(get_current_active_user)
 ):
     """获取设备的最新传感器数据（需要认证）"""
+    # 权限检查
+    device = device_service_module.get_device(db, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    if not current_user.is_admin and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access these sensors")
+
     sensors = sensor_service_module.get_latest_device_sensors(db, device_id)
     return sensors

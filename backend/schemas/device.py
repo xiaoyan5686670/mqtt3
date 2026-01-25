@@ -51,6 +51,7 @@ class Device(DeviceBase):
     mqtt_config_id: Optional[int] = None
     topic_config_id: Optional[int] = None
     publish_topic: Optional[str] = None  # 发布主题（计算属性）
+    user_id: Optional[int] = None  # 设备所属用户ID
     created_at: datetime  # 设备创建时间
 
     class Config:

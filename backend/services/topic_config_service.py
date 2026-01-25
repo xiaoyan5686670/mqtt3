@@ -5,24 +5,78 @@ from models.topic_config import TopicConfigModel
 from schemas.topic_config import TopicConfigCreate, TopicConfigUpdate
 
 
-def get_topic_config(db: Session, config_id: int) -> Optional[TopicConfigModel]:
-    """根据ID获取主题配置"""
-    return db.query(TopicConfigModel).filter(TopicConfigModel.id == config_id).first()
+def get_topic_config(db: Session, config_id: int, user_id: Optional[int] = None) -> Optional[TopicConfigModel]:
+    """根据ID获取主题配置
+    
+    Args:
+        config_id: 配置ID
+        user_id: 可选，验证配置是否属于该用户。如果为None，不进行用户验证
+    """
+    query = db.query(TopicConfigModel).filter(TopicConfigModel.id == config_id)
+    
+    if user_id is not None:
+        query = query.filter(TopicConfigModel.user_id == user_id)
+    
+    return query.first()
 
 
-def get_topic_configs(db: Session, skip: int = 0, limit: int = 100) -> List[TopicConfigModel]:
-    """获取主题配置列表"""
-    return db.query(TopicConfigModel).offset(skip).limit(limit).all()
+def get_topic_configs(db: Session, skip: int = 0, limit: int = 100, user_id: Optional[int] = None) -> List[TopicConfigModel]:
+    """获取主题配置列表
+    
+    Args:
+        skip: 跳过数量
+        limit: 限制数量
+        user_id: 可选，按用户ID筛选。如果为None，返回所有配置（管理员使用）
+    """
+    query = db.query(TopicConfigModel)
+    
+    if user_id is not None:
+        query = query.filter(TopicConfigModel.user_id == user_id)
+    
+    return query.offset(skip).limit(limit).all()
 
 
-def get_active_topic_configs(db: Session) -> List[TopicConfigModel]:
-    """获取所有激活的主题配置"""
-    return db.query(TopicConfigModel).filter(TopicConfigModel.is_active == True).all()
+def get_active_topic_configs(db: Session, user_id: Optional[int] = None) -> List[TopicConfigModel]:
+    """获取所有激活的主题配置
+    
+    Args:
+        user_id: 可选，按用户ID筛选。如果为None，返回所有激活的配置
+    """
+    query = db.query(TopicConfigModel).filter(TopicConfigModel.is_active == True)
+    
+    if user_id is not None:
+        query = query.filter(TopicConfigModel.user_id == user_id)
+    
+    return query.all()
 
 
-def create_topic_config(db: Session, config: TopicConfigCreate) -> TopicConfigModel:
-    """创建主题配置"""
-    db_config = TopicConfigModel(**config.model_dump())
+def create_topic_config(db: Session, config: TopicConfigCreate, user_id: Optional[int] = None) -> TopicConfigModel:
+    """创建主题配置
+    
+    Args:
+        config: 主题配置数据
+        user_id: 可选，所属用户ID。如果为None，创建系统级配置
+    
+    Raises:
+        ValueError: 如果配置名称在同一用户内已存在
+    """
+    # 验证同一用户内配置名称唯一性
+    existing = db.query(TopicConfigModel).filter(
+        TopicConfigModel.name == config.name,
+        TopicConfigModel.user_id == user_id
+    ).first()
+    
+    if existing:
+        if user_id is None:
+            raise ValueError(f"系统级主题配置名称 '{config.name}' 已存在")
+        else:
+            raise ValueError(f"主题配置名称 '{config.name}' 已存在，请使用其他名称")
+    
+    config_data = config.model_dump()
+    if user_id is not None:
+        config_data["user_id"] = user_id
+    
+    db_config = TopicConfigModel(**config_data)
     db.add(db_config)
     db.commit()
     db.refresh(db_config)
@@ -30,12 +84,31 @@ def create_topic_config(db: Session, config: TopicConfigCreate) -> TopicConfigMo
 
 
 def update_topic_config(db: Session, config_id: int, config_update: TopicConfigUpdate) -> Optional[TopicConfigModel]:
-    """更新主题配置"""
+    """更新主题配置
+    
+    Raises:
+        ValueError: 如果配置名称在同一用户内已存在（排除当前配置）
+    """
     db_config = db.query(TopicConfigModel).filter(TopicConfigModel.id == config_id).first()
     if not db_config:
         return None
     
     update_data = config_update.model_dump(exclude_unset=True)
+    
+    # 如果更新了名称，检查同一用户内是否已存在同名配置（排除当前配置）
+    if "name" in update_data and update_data["name"] != db_config.name:
+        existing = db.query(TopicConfigModel).filter(
+            TopicConfigModel.name == update_data["name"],
+            TopicConfigModel.user_id == db_config.user_id,
+            TopicConfigModel.id != config_id
+        ).first()
+        
+        if existing:
+            if db_config.user_id is None:
+                raise ValueError(f"系统级主题配置名称 '{update_data['name']}' 已存在")
+            else:
+                raise ValueError(f"主题配置名称 '{update_data['name']}' 已存在，请使用其他名称")
+    
     for key, value in update_data.items():
         setattr(db_config, key, value)
     
@@ -119,8 +192,8 @@ def find_topic_config_by_device_name(db: Session, device_name: str) -> Optional[
     # 去重
     possible_topics = list(set(possible_topics))
     
-    # 获取所有激活的 TopicConfig
-    active_configs = get_active_topic_configs(db)
+    # 获取所有激活的 TopicConfig（不限制用户，用于设备匹配）
+    active_configs = get_active_topic_configs(db, user_id=None)
     
     # 解析每个 TopicConfig 的 subscribe_topics，查找匹配
     for config in active_configs:

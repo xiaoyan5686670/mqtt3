@@ -34,39 +34,39 @@ const routes = [
     path: '/devices',
     name: 'DeviceList',
     component: DeviceList,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以访问，只能看到自己的设备
   },
   {
     path: '/devices/:id',
     name: 'DeviceDetail',
     component: DeviceDetail,
     props: true,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以访问，只能看到自己的设备
   },
   {
     path: '/devices/new',
     name: 'DeviceNew',
     component: DeviceEdit,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以创建设备
   },
   {
     path: '/devices/:id/edit',
     name: 'DeviceEdit',
     component: DeviceEdit,
     props: true,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以编辑自己的设备
   },
   {
     path: '/realtime-data',
     name: 'RealTimeData',
     component: RealTimeData,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以查看实时数据（只能看到自己的设备）
   },
   {
     path: '/mqtt-config',
     name: 'MqttConfig',
     component: MqttConfig,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以访问
   },
   {
     path: '/emqx-api-config',
@@ -78,7 +78,7 @@ const routes = [
     path: '/topic-config',
     name: 'TopicConfig',
     component: TopicConfig,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }  // 普通用户也可以访问
   },
   {
     path: '/subscribe-options',
