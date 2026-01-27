@@ -371,12 +371,24 @@
               <!-- 卡片主体：关键数据指标（温度、湿度优先） -->
               <div class="card-body py-2 px-3">
                 <!-- 重要指标：美观的 Mini 分组 (Air & Comp) -->
-                <div v-if="hasGroupsOrPriority(deviceData.sensors)" class="priority-metrics mb-2">
-                  <div class="row g-2">
-                    
-                    <!-- 遍历所有分组 -->
+                <div 
+                  v-if="hasGroupsOrPriority(deviceData.sensors)" 
+                  class="priority-metrics-container"
+                  @mouseenter="hoveredDeviceIdForRestore = deviceData.device.id"
+                  @mouseleave="hoveredDeviceIdForRestore = null"
+                >
+                  <div 
+                    v-if="hasHiddenGroupsForDevice(deviceData.device.id) && hoveredDeviceIdForRestore === deviceData.device.id" 
+                    class="restore-button-wrapper"
+                  >
+                    <button type="button" class="btn-restore-subtle" @click="restoreGroups(deviceData.device.id)" title="恢复该设备下所有已关闭的分组">
+                      <i class="fas fa-undo me-1"></i>还原
+                    </button>
+                  </div>
+                  <div class="priority-metrics mb-2">
+                    <div class="row g-2">
                     <div 
-                      v-for="group in getSensorGroups(deviceData.sensors).groups" 
+                      v-for="group in getVisibleGroups(deviceData)" 
                       :key="`${group.groupType}-${group.number}`"
                       class="col-12"
                     >
@@ -384,6 +396,9 @@
                       <div v-if="group.groupType === 'air'" class="mini-group-card status-default">
                         <div class="mini-group-header">
                           <span class="mini-title"><i class="fas fa-layer-group me-1"></i>环境组 {{ group.number }}</span>
+                          <button type="button" class="btn-group-close" title="关闭此分组" @click="hideGroup(deviceData.device.id, group)">
+                            <i class="fas fa-times"></i>
+                          </button>
                         </div>
                         <div class="mini-body">
                           <!-- 温度 -->
@@ -430,8 +445,11 @@
 
                       <!-- Comp Group: 流程组 (入口 -> 出口) -->
                       <div v-else-if="group.groupType === 'comp'" class="mini-group-card" :class="group.out && group.in && group.out.value >= group.in.value ? 'status-normal' : 'status-abnormal'">
-                         <div class="mini-group-header">
+                        <div class="mini-group-header">
                           <span class="mini-title"><i class="fas fa-fan me-1"></i>流程组 {{ group.number }}</span>
+                          <button type="button" class="btn-group-close" title="关闭此分组" @click="hideGroup(deviceData.device.id, group)">
+                            <i class="fas fa-times"></i>
+                          </button>
                         </div>
                         <div class="mini-body">
                           <!-- 入口 -->
@@ -504,7 +522,7 @@
                         </div>
                       </div>
                     </div>
-
+                    </div>
                   </div>
                 </div>
                 
@@ -655,7 +673,53 @@ export default {
     const relayToggleLock = ref(new Set())
     const relayExpectedStates = ref(new Map())
     const allTopicConfigs = ref([])
+    const STORAGE_KEY_HIDDEN_GROUPS = 'dashboard_hidden_groups'
+    
+    // 从 localStorage 加载已隐藏的分组
+    const loadHiddenGroups = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY_HIDDEN_GROUPS)
+        if (stored) {
+          const keys = JSON.parse(stored)
+          return new Set(keys)
+        }
+      } catch (e) {
+        console.warn('加载隐藏分组状态失败:', e)
+      }
+      return new Set()
+    }
+    
+    // 保存到 localStorage
+    const saveHiddenGroups = (keys) => {
+      try {
+        localStorage.setItem(STORAGE_KEY_HIDDEN_GROUPS, JSON.stringify([...keys]))
+      } catch (e) {
+        console.warn('保存隐藏分组状态失败:', e)
+      }
+    }
+
+    const hiddenGroupKeys = ref(loadHiddenGroups()) // 'deviceId-groupType-number' 已隐藏的分组
+    const hoveredDeviceIdForRestore = ref(null) // 鼠标悬停时显示还原按钮的设备 ID
     let refreshInterval = null
+
+    const groupKey = (deviceId, group) => `${deviceId}-${group.groupType}-${group.number}`
+    const isGroupHidden = (deviceId, group) => hiddenGroupKeys.value.has(groupKey(deviceId, group))
+    const hideGroup = (deviceId, group) => {
+      hiddenGroupKeys.value = new Set([...hiddenGroupKeys.value, groupKey(deviceId, group)])
+      saveHiddenGroups(hiddenGroupKeys.value)
+    }
+    const restoreGroups = (deviceId) => {
+      const pre = `${deviceId}-`
+      hiddenGroupKeys.value = new Set([...hiddenGroupKeys.value].filter((k) => !k.startsWith(pre)))
+      saveHiddenGroups(hiddenGroupKeys.value)
+    }
+    /** 该设备是否有被关闭的分组（有任意一个即算） */
+    const hasHiddenGroupsForDevice = (deviceId) =>
+      [...hiddenGroupKeys.value].some((k) => k.startsWith(`${deviceId}-`))
+    const getVisibleGroups = (deviceData) => {
+      const groups = getSensorGroups(deviceData.sensors).groups
+      return groups.filter((g) => !isGroupHidden(deviceData.device.id, g))
+    }
 
     // 判断是否为继电器/开关类型（需要在 fetchDevicesWithSensors 之前定义）
     const isRelayType = (type) => {
@@ -1121,7 +1185,8 @@ export default {
       handleSearch, clearSearch, startEditDevice, saveDeviceName, cancelEditDevice,
       startEditSensor, saveSensorName, cancelEditSensor, toggleRelay, isRelaySending, isRelayType,
       getRelayInStatusValue, getRelayInDisplayName, startEditRelayIn, saveRelayInName, 
-      cancelEditRelayIn, isReadOnlyRelayInput
+      cancelEditRelayIn, isReadOnlyRelayInput,
+      hideGroup, restoreGroups, hasHiddenGroupsForDevice, getVisibleGroups, hoveredDeviceIdForRestore
     }
   }
 }
@@ -1243,7 +1308,25 @@ export default {
   display: inline-block;
   vertical-align: middle;
 }
-.priority-metrics { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-radius: 6px; padding: 4px; border: 1px solid #e3f2fd; }
+.priority-metrics-container {
+  position: relative;
+}
+.priority-metrics { 
+  background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); 
+  border-radius: 6px; 
+  padding: 4px; 
+  border: 1px solid #e3f2fd; 
+}
+.restore-button-wrapper {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  z-index: 10;
+  background: white;
+  border-radius: 4px;
+  padding: 2px 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 .metric-card { background: white; border-radius: 4px; padding: 8px; border-left: 3px solid #2196F3; }
 
 /* 美观的 Mini 分组卡片 (复刻 Compressor Group 风格) */
@@ -1284,6 +1367,37 @@ export default {
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.btn-group-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+.btn-group-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-restore-subtle {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+.btn-restore-subtle:hover {
+  color: #6b7280;
 }
 
 .mini-body {
