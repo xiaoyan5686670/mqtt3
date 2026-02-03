@@ -479,8 +479,8 @@ export default {
               return points.reduce((a, b) => a + b, 0) / points.length
             }),
             smooth: true,
-            showSymbol: false,
-            connectNulls: false
+            showSymbol: true,
+            connectNulls: true
           }
         })
         .filter(s => s.data && s.data.some(v => v !== null))
