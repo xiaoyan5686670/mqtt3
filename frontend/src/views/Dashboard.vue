@@ -99,7 +99,7 @@
             id="tempMonitorDeviceSelect"
             v-model="selectedTemperatureMonitorDeviceId"
             @change="onTemperatureMonitorDeviceChange"
-            class="form-select form-select-sm d-inline-block"
+            class="form-select form-select-sm d-inline-block me-3"
             style="max-width: 320px;"
           >
             <option value="">请选择要展示的设备</option>
@@ -107,6 +107,20 @@
               {{ getDeviceDisplayName(d.device) }} ({{ d.device.name }})
             </option>
           </select>
+          <label for="compressorMinDiffInput" class="form-label me-2 ms-2">最小温差（出口−入口）</label>
+          <input
+            id="compressorMinDiffInput"
+            type="number"
+            v-model.number="compressorMinDiff"
+            @change="onCompressorMinDiffChange"
+            min="0"
+            max="100"
+            step="0.5"
+            class="form-control form-control-sm d-inline-block"
+            style="width: 90px;"
+            title="与传感器单位一致（如 °C/°F）"
+          />
+          <span class="text-muted small ms-1">与传感器单位一致</span>
         </div>
       </div>
       <!-- 已选择设备时展示该设备的压缩机监控卡片 -->
@@ -176,7 +190,7 @@
                             <i class="fas fa-check-circle me-1"></i>正常运行
                           </span>
                           <span v-else class="badge bg-danger">
-                            <i class="fas fa-exclamation-triangle me-1"></i>温度异常 (出口 < 入口)
+                            <i class="fas fa-exclamation-triangle me-1"></i>{{ compressorMinDiff > 0 ? `温度异常 (出口−入口 < ${compressorMinDiff})` : '温度异常 (出口 < 入口)' }}
                           </span>
                         </div>
                       </div>
@@ -1140,15 +1154,32 @@ export default {
 
     // 温度监控专区：通过下拉框选择设备，选择结果存 localStorage
     const STORAGE_KEY_TEMP_MONITOR_DEVICE = 'dashboard_temperature_monitor_device_id'
+    const STORAGE_KEY_TEMP_MONITOR_MIN_DIFF = 'temp_monitor_min_diff'
     const loadTempMonitorDeviceId = () => {
       try {
         const v = localStorage.getItem(STORAGE_KEY_TEMP_MONITOR_DEVICE)
         return (v != null && String(v).trim()) ? String(v).trim() : ''
       } catch (_) { return '' }
     }
+    const loadCompressorMinDiff = () => {
+      try {
+        const v = localStorage.getItem(STORAGE_KEY_TEMP_MONITOR_MIN_DIFF)
+        if (v == null || v === '') return 0
+        const n = Number(v)
+        return (typeof n === 'number' && !Number.isNaN(n) && n >= 0) ? Math.min(100, n) : 0
+      } catch (_) { return 0 }
+    }
     const selectedTemperatureMonitorDeviceId = ref(loadTempMonitorDeviceId())
+    const compressorMinDiff = ref(loadCompressorMinDiff())
     const onTemperatureMonitorDeviceChange = () => {
       try { localStorage.setItem(STORAGE_KEY_TEMP_MONITOR_DEVICE, selectedTemperatureMonitorDeviceId.value || '') } catch (_) {}
+    }
+    const onCompressorMinDiffChange = () => {
+      let v = compressorMinDiff.value
+      if (typeof v !== 'number' || Number.isNaN(v)) v = 0
+      else v = Math.max(0, Math.min(100, v))
+      compressorMinDiff.value = v
+      try { localStorage.setItem(STORAGE_KEY_TEMP_MONITOR_MIN_DIFF, String(v)) } catch (_) {}
     }
 
     const temperatureMonitorDevices = computed(() => {
@@ -1191,7 +1222,8 @@ export default {
       const a = comp.in?.value
       const b = comp.out?.value
       if (a == null || b == null) return false
-      return b >= a
+      const minDiff = compressorMinDiff.value ?? 0
+      return (Number(b) - Number(a)) >= minDiff
     }
 
     const getCompressorGroupClass = (comp) =>
@@ -1212,6 +1244,7 @@ export default {
     return {
       devices, devicesWithSensors, filteredDevices, isLoading, searchKeyword, authStore,
       selectedTemperatureMonitorDeviceId, onTemperatureMonitorDeviceChange,
+      compressorMinDiff, onCompressorMinDiffChange,
       temperatureMonitorDevices, getCompressorSensorsForDevice, getCompressorTemp, isCompressorNormal, getCompressorGroupClass, getCompressorUnit,
       editingSensorId, editingSensorName, editingDeviceId, editingDeviceName, 
       editingRelayInId, editingRelayInName, sendingRelayId,
