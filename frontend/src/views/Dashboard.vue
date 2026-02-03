@@ -94,19 +94,35 @@
     <div class="temperature-monitor-section mb-4">
       <div class="row mb-3">
         <div class="col-12">
-          <label for="tempMonitorDeviceSelect" class="form-label me-2">温度监控专区</label>
-          <select
-            id="tempMonitorDeviceSelect"
-            v-model="selectedTemperatureMonitorDeviceId"
-            @change="onTemperatureMonitorDeviceChange"
-            class="form-select form-select-sm d-inline-block me-3"
-            style="max-width: 320px;"
-          >
-            <option value="">请选择要展示的设备</option>
-            <option v-for="d in devicesWithSensors" :key="d.device.id" :value="String(d.device.id)">
-              {{ getDeviceDisplayName(d.device) }} ({{ d.device.name }})
-            </option>
-          </select>
+          <label for="tempMonitorDeviceDropdown" class="form-label me-2">温度监控专区</label>
+          <div class="dropdown d-inline-block me-3 temperature-monitor-device-dropdown">
+            <button
+              id="tempMonitorDeviceDropdown"
+              type="button"
+              class="btn btn-sm dropdown-toggle temperature-monitor-device-dropdown-btn"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              style="max-width: 320px;"
+            >
+              {{ selectedTemperatureMonitorDeviceLabel }}
+            </button>
+            <ul class="dropdown-menu temperature-monitor-device-dropdown-menu">
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="#"
+                  @click.prevent="selectTemperatureMonitorDevice('')"
+                >请选择要展示的设备</a>
+              </li>
+              <li v-for="d in devicesWithSensors" :key="d.device.id">
+                <a
+                  class="dropdown-item"
+                  href="#"
+                  @click.prevent="selectTemperatureMonitorDevice(String(d.device.id))"
+                >{{ getDeviceDisplayName(d.device) }} ({{ d.device.name }})</a>
+              </li>
+            </ul>
+          </div>
           <label for="compressorMinDiffInput" class="form-label me-2 ms-2">最小温差（出口−入口）</label>
           <input
             id="compressorMinDiffInput"
@@ -1189,6 +1205,18 @@ export default {
       return d ? [d] : []
     })
 
+    const selectedTemperatureMonitorDeviceLabel = computed(() => {
+      const id = selectedTemperatureMonitorDeviceId.value
+      if (!id) return '请选择要展示的设备'
+      const d = devicesWithSensors.value.find(d => String(d.device.id) === id)
+      return d ? `${getDeviceDisplayName(d.device)} (${d.device.name})` : '请选择要展示的设备'
+    })
+
+    function selectTemperatureMonitorDevice(id) {
+      selectedTemperatureMonitorDeviceId.value = id
+      onTemperatureMonitorDeviceChange()
+    }
+
     // 压缩机传感器：comp{N}_in_temperature、comp{N}_out_temperature，可选后缀 _F、_C 等
     const COMPRESSOR_SENSOR_RE = /^comp(\d+)_(in|out)_temperature(_\w+)?$/i
 
@@ -1244,6 +1272,7 @@ export default {
     return {
       devices, devicesWithSensors, filteredDevices, isLoading, searchKeyword, authStore,
       selectedTemperatureMonitorDeviceId, onTemperatureMonitorDeviceChange,
+      selectedTemperatureMonitorDeviceLabel, selectTemperatureMonitorDevice,
       compressorMinDiff, onCompressorMinDiffChange,
       temperatureMonitorDevices, getCompressorSensorsForDevice, getCompressorTemp, isCompressorNormal, getCompressorGroupClass, getCompressorUnit,
       editingSensorId, editingSensorName, editingDeviceId, editingDeviceName, 
@@ -1410,7 +1439,7 @@ export default {
 }
 
 .light-mode .temperature-monitor-card {
-  background: #ffffff;
+  background: #f8fcfd;
   border: 1px solid #e2e8f0;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
@@ -1422,6 +1451,15 @@ export default {
 
 .light-mode .bg-gradient-primary h5 {
   color: #1e293b;
+  text-shadow: none;
+}
+
+.light-mode .temperature-monitor-card .card-header.bg-gradient-primary {
+  background: linear-gradient(90deg, #f0fdfa 0%, #e0f2fe 50%, #ecfeff 100%) !important;
+  border-bottom: 1px solid rgba(6, 182, 212, 0.2);
+}
+.light-mode .temperature-monitor-card .card-header.bg-gradient-primary h5 {
+  color: #0e7490;
   text-shadow: none;
 }
 
@@ -1450,9 +1488,35 @@ export default {
 }
 
 .light-mode .temperature-monitor-section .form-select {
-  background-color: #ffffff;
+  background-image: none;
+  background-color: #ffffff !important;
   border-color: #cbd5e1;
   color: #1e293b;
+}
+
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-btn {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-btn:hover,
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-btn:focus {
+  background-color: #f8fafc !important;
+  border-color: #06b6d4;
+  color: #0e7490;
+}
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-menu {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-menu .dropdown-item {
+  color: #1e293b;
+}
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-menu .dropdown-item:hover,
+.light-mode .temperature-monitor-section .temperature-monitor-device-dropdown-menu .dropdown-item:focus {
+  background: rgba(6, 182, 212, 0.1);
+  color: #0e7490;
 }
 
 .light-mode .header-banner {
@@ -2461,19 +2525,53 @@ export default {
   text-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
 }
 .temperature-monitor-section .form-select {
-  background-color: rgba(30, 41, 59, 0.6);
+  background-image: none;
+  background-color: rgba(30, 41, 59, 0.95) !important;
   border: 1px solid rgba(6, 182, 212, 0.3);
   border-radius: 10px;
   color: #fff;
   transition: all 0.3s ease;
 }
 .temperature-monitor-section .form-select:focus {
-  background-color: rgba(30, 41, 59, 0.8);
+  background-color: rgba(30, 41, 59, 0.98) !important;
   border-color: #06b6d4;
   box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
 }
+.temperature-monitor-section .temperature-monitor-device-dropdown-btn {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 10px;
+  color: #fff;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  min-width: 200px;
+  text-align: left;
+}
+.temperature-monitor-section .temperature-monitor-device-dropdown-btn:hover,
+.temperature-monitor-section .temperature-monitor-device-dropdown-btn:focus {
+  background-color: rgba(30, 41, 59, 0.98) !important;
+  border-color: #06b6d4;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+}
+.temperature-monitor-section .temperature-monitor-device-dropdown-menu {
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 10px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+  padding: 0.25rem 0;
+}
+.temperature-monitor-section .temperature-monitor-device-dropdown-menu .dropdown-item {
+  color: #e2e8f0;
+  padding: 0.5rem 1rem;
+}
+.temperature-monitor-section .temperature-monitor-device-dropdown-menu .dropdown-item:hover,
+.temperature-monitor-section .temperature-monitor-device-dropdown-menu .dropdown-item:focus {
+  background: rgba(6, 182, 212, 0.2);
+  color: #fff;
+}
 .temperature-monitor-card {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(15px);
   border: 1px solid rgba(6, 182, 212, 0.3);
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
@@ -2498,6 +2596,16 @@ export default {
   letter-spacing: 0.1em;
   color: #fff;
   text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+.temperature-monitor-card .card-header.bg-gradient-primary {
+  background: linear-gradient(90deg, #0f172a 0%, #155e75 50%, #0e7490 100%) !important;
+  border-bottom: 1px solid rgba(6, 182, 212, 0.35);
+  box-shadow: inset 0 1px 0 rgba(6, 182, 212, 0.1);
+}
+.temperature-monitor-card .card-header.bg-gradient-primary h5 {
+  color: #fff;
+  text-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
 }
 
 /* 压缩机组件样式 */
