@@ -381,17 +381,18 @@ export default {
       loadingData.value = true
       error.value = ''
       try {
-        // 根据时间维度设置合适的数据量限制
-        // 周维度：7天 * 24小时 * 360条/小时（每10秒一条）* 传感器数量(约10个) = 约60万条
-        // 为保险起见，周维度取50000条，月维度取150000条
-        const params = { 
-          limit: timeRange.value === 'month' ? 150000 : timeRange.value === 'week' ? 50000 : 10000 
-        }
+        // 根据时间维度设置查询参数
+        // 日维度：限制返回的数据条数，防止一次性加载过多
+        // 周/月维度：完全依赖后端的时间范围过滤，不再额外限制条数，避免只拿到最近一两天的数据
+        const params = {}
         if (timeRange.value === 'month') {
           params.start_time = `${startDate.value}T00:00:00`
           params.end_time = `${endDate.value}T23:59:59`
         } else {
           params.time_range = timeRange.value
+          if (timeRange.value === 'day') {
+            params.limit = 10000
+          }
         }
 
         const res = await axios.get(`/api/sensors/device/${selectedDeviceId.value}/history`, { params })
